@@ -55,16 +55,15 @@ echo [INFO] Resolving Quarto...
 
 set "QUARTO_CMD="
 
+:: Check local first, then system path
 if exist "%BASE_DIR%app\runtime\quarto\bin\quarto.exe" (
     set "QUARTO_CMD=%BASE_DIR%app\runtime\quarto\bin\quarto.exe"
-)
-
-if "%QUARTO_CMD%"=="" (
+) else (
     for /f "delims=" %%i in ('where quarto.exe 2^>nul') do set "QUARTO_CMD=%%i"
 )
 
 if "%QUARTO_CMD%"=="" (
-    for /f "delims=" %%i in ('where quarto.cmd 2^>nul') do set "QUARTO_CMD=%%i"
+    if exist "%LOCALAPPDATA%\Programs\Quarto\bin\quarto.exe" set "QUARTO_CMD=%LOCALAPPDATA%\Programs\Quarto\bin\quarto.exe"
 )
 
 if "%QUARTO_CMD%"=="" (
@@ -79,12 +78,14 @@ echo [INFO] Resolving R...
 
 set "RSCRIPT_EXE="
 
-for /d %%D in ("%BASE_DIR%app\runtime\R\R-*") do (
-    if exist "%%D\bin\Rscript.exe" set "RSCRIPT_EXE=%%D\bin\Rscript.exe"
-)
+:: Try where command first
+for /f "delims=" %%i in ('where Rscript.exe 2^>nul') do set "RSCRIPT_EXE=%%i"
 
+:: If not found, check common folders
 if "%RSCRIPT_EXE%"=="" (
-    for /f "delims=" %%i in ('where Rscript.exe 2^>nul') do set "RSCRIPT_EXE=%%i"
+    for /d %%D in ("C:\Program Files\R\R-*") do (
+        if exist "%%D\bin\Rscript.exe" set "RSCRIPT_EXE=%%D\bin\Rscript.exe"
+    )
 )
 
 if "%RSCRIPT_EXE%"=="" (
