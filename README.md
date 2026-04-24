@@ -17,7 +17,7 @@ This pipeline is designed for simple and direct use in laboratory routines, requ
 Clone this repository and restore dependencies using renv.
 
 ### ▶ For end users (portable version)
-Download the portable Windows version from GitHub Releases *[here]([../../releases/latest](https://github.com/lanfredig/QC-espresso_DIA/releases/tag/v0.2.7-portable))*.
+Download the portable Windows version from GitHub Releases *[here](https://github.com/lanfredig/QC-espresso_DIA/releases/tag/v0.2.7-portable)*.
 The portable version bundles R and Quarto, which are redistributed under their respective open-source licenses.
 License notices are included within the portable package.
 
