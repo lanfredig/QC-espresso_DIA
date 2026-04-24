@@ -1,0 +1,12 @@
+This project includes third-party software distributed under
+their respective open-source licenses:
+
+- R: Copyright by the R Foundation for Statistical Computing
+  Licensed under the GNU General Public License (GPL v2 or v3)
+  License text included in the R distribution.
+
+- Quarto CLI: Copyright by Posit Software, PBC
+  Licensed under the MIT License
+  License text included in the Quarto distribution.
+
+The license in LICENSE applies only to the source code of this repository.
