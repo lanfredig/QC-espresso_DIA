@@ -1,0 +1,155 @@
+Proteomics Data QC espresso – DIA
+CHANGELOG
+
+============================================================
+Version v0.2.7 (Released)
+============================================================
+
+Focus: Portability, execution robustness, and architectural hardening
+
+This version represents a major infrastructure milestone. No changes
+were made to the scientific scope of the QC report; all work focused on
+making the pipeline portable, deterministic, and safe for routine
+laboratory use across heterogeneous environments.
+
+
+Added / Changed
+----------------
+
+Execution and Portability
+-------------------------
+- Introduced a fully portable execution model:
+  - No hard-coded absolute paths.
+  - Project root resolved dynamically at runtime.
+  - Consistent behavior regardless of working directory.
+- Implemented Quarto-aware root discovery in the QC script using
+  structural markers rather than getwd().
+- Removed remaining working-directory-based assumptions from the QC
+  script.
+- Added parameterized input handling (e.g. report.parquet and FASTA),
+  while preserving sensible project-default behavior.
+- Ensured deterministic use of project-local input and output
+  directories.
+
+Runtime and Environment
+-----------------------
+- Added support for portable R and Quarto runtimes shipped with the
+  project.
+- Introduced a project-local .Renviron to enforce a controlled R startup
+  environment.
+- Ensured Quarto rendering uses the resolved R executable consistently
+  across systems.
+- Improved transparency by explicitly reporting:
+  - Resolved project root
+  - Selected DIA-NN report
+  - FASTA selection rule and chosen file
+
+Output Handling
+---------------
+- Centralized all generated outputs in the Results directory.
+- Ensured both:
+  - the HTML QC report, and
+  - the protein coverage CSV file
+  are saved to Results with timestamped filenames.
+- Preserved all prior reports to avoid accidental overwrites.
+
+
+Launcher
+--------
+- Launcher behavior remained functionally stable.
+- Confirmed launcher is now the primary execution interface.
+- Launcher enforces:
+  - Input validation before execution
+  - Correct execution context
+  - Early failure on missing inputs or tools
+- Execution via user-facing shortcut (`run_QC_espresso`) standardized
+  as the recommended usage mode.
+
+
+Documentation
+-------------
+- Fully revised documentation to reflect the portable execution model.
+- Updated launcher documentation to accurately describe:
+  - input validation
+  - tool discovery
+  - failure behavior
+- Updated QC script documentation to describe:
+  - context-aware path resolution
+  - parameterized inputs
+  - data flow and QC logic
+- Updated user-facing documentation (LEIAME) to:
+  - place usage instructions first
+  - describe required user inputs explicitly
+  - explain shortcut-based interaction
+  - hide implementation details from routine users
+- Clarified third-party software usage (R and Quarto) and license scope.
+
+
+Notes
+-----
+- No new QC metrics were introduced in this version.
+- No analytical logic was modified.
+- No biological interpretation was added or changed.
+- All changes are structural, architectural, and execution-focused.
+- This version serves as a stable foundation for future feature and
+  QC-metric expansion.
+
+
+============================================================
+Version v0.2.6
+============================================================
+
+Focus: Expanded QC scope and internal consistency
+
+Added
+-----
+- Protein sequence coverage assessment at the amino-acid level:
+  - Identified peptides mapped to full protein sequences using FASTA.
+  - Coverage percentage calculated per protein group.
+  - Top-ranked proteins displayed in the HTML report.
+  - Full protein coverage dataset exported as CSV.
+- Monitoring of trypsin autolysis peptides:
+  - Retention time reproducibility across runs.
+  - Quantitative signal consistency.
+  - Conditional execution when peptides are detected.
+
+Improved
+--------
+- Consolidated and standardized QC visualizations across sections.
+- Improved table formatting and consistency using gt and gtExtras.
+- Added defensive guards for optional QC components.
+- Refined data completeness reporting and presentation.
+
+Documentation
+-------------
+- Added detailed script logic documentation.
+- Added a dedicated launcher README.
+- Clarified which data are displayed versus exported in the report.
+
+Notes
+-----
+- This version significantly broadened QC beyond run-level metrics,
+  adding protein-centric and internal-control-based diagnostics.
+
+
+============================================================
+Version v0.2.5 and Earlier
+============================================================
+
+- Initial DIA QC framework.
+- Core run-level QC metrics:
+  - Identification depth.
+  - Charge state distribution.
+  - Peptide length.
+  - Retention time coverage.
+  - Chromatographic performance (FWHM, peak width).
+  - Mass accuracy.
+  - Digestion efficiency.
+  - Intensity distributions.
+  - Data completeness.
+- Basic Quarto-based report generation.
+- Initial Windows batch launcher support.
+
+============================================================
+END OF FILE
+============================================================
