@@ -1,0 +1,2026 @@
+---
+title: "Proteomics data QC - DIA - v.0.2.7"
+
+author: "Guilherme Lanfredi"
+
+# Automatically inserts the current system date at render time
+date: "`r Sys.Date()`"
+
+# NEW (ONLY ADDITION): allow report.parquet to be passed from batch script
+params:
+  report_path: null
+  fasta_path: null
+  output_dir: null
+
+# Output format configuration
+format:
+  # HTML output settings
+  html:
+    # Enables an automatic table of contents
+    toc: true
+
+    # Places the table of contents on the left side of the page
+    toc-location: left
+    
+    # Keeps only the section title on the index
+    toc-depth: 2
+
+    # Uses the Bootstrap "cosmo" theme for styling
+    theme: cosmo
+
+    # Expands the page to full browser width
+    page-layout: full
+
+    # Allows code blocks to be collapsed/expanded
+    code-fold: true
+
+    # Text shown on folded code blocks
+    code-summary: "Show the code"
+
+    # Embeds external resources (e.g., images, CSS) directly into the HTML
+    embed-resources: true
+
+    # Produces a fully self-contained HTML file
+    self-contained: true
+
+# Global execution options for all code chunks
+execute:
+  # Suppresses messages produced during code execution
+  message: false
+
+  # Suppresses warning messages during code execution
+  warning: false
+
+  # Default width (in inches) for generated figures
+  fig-width: 12
+
+  # Default height (in inches) for generated figures
+  fig-height: 8
+---
+
+## 1.Loading libraries
+
+```{r}
+#| label: Loading libraries
+
+library(tidyverse)      # Core set of packages for data wrangling, transformation, and visualization
+library(arrow)          # Fast input/output for large, columnar data formats (e.g., Parquet)
+library(ggplot2)        # Grammar-of-graphics framework for building high-quality plots
+library(ggrepel)        # Improves text annotation readability by preventing label overlaps
+library(scales)         # Tools for axis, legend, and label scaling (percent, log, breaks, etc.)
+library(RColorBrewer)   # Colorblind-friendly and publication-ready color palettes
+library(knitr)          # Engine for rendering dynamic reports and formatted tables
+library(kableExtra)     # Advanced styling and formatting of knitr tables for professional reports
+library(microseq)       # Reading and handling protein FASTA sequences
+library(gt)             # Creation of high-quality, publication-ready tables
+library(gtExtras)       # Additional visual enhancements for gt tables (bars, icons, fills)
+library(rprojroot)      # Robust project-root discovery for scripts and reports
+
+# --------------------------------------------------
+# Global static palettes (do NOT depend on data)
+# --------------------------------------------------
+
+# Okabe–Ito color-blind–safe palette
+cb_palette <- c(
+  "#E69F00", # orange
+  "#56B4E9", # sky blue
+  "#009E73", # bluish green
+  "#F0E442", # yellow
+  "#0072B2", # blue
+  "#D55E00", # vermillion
+  "#CC79A7"  # reddish purple
+)
+
+
+```
+
+## 2.Loading results
+
+```{r}
+#| label: loading-files
+
+# ==================================================
+# Resolve pipeline root (BAT + Quarto SAFE)
+# Expected working dir when rendered: app/Rscripts
+# ==================================================
+
+script_root <- normalizePath("..", winslash = "/", mustWork = TRUE)
+message("Pipeline root resolved to: ", script_root)
+
+# ==================================================
+# Canonical OUTPUT dir (SINGLE SOURCE OF TRUTH)
+# Comes from BAT, fallback is output/Results
+# ==================================================
+
+if (!is.null(params$output_dir)) {
+  results_dir <- normalizePath(params$output_dir, winslash = "/", mustWork = FALSE)
+} else {
+  results_dir <- file.path(script_root, "output", "Results")
+}
+
+dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
+message("Results directory: ", results_dir)
+
+# ==================================================
+# Resolve DIA‑NN report (BAT → PARAM → fallback)
+# ==================================================
+
+if (!is.null(params$report_path)) {
+
+  report_path <- normalizePath(
+    params$report_path,
+    winslash = "/",
+    mustWork = TRUE
+  )
+
+} else {
+
+  report_path <- normalizePath(
+    file.path(script_root, "output", "DIANN-out", "report.parquet"),
+    winslash = "/",
+    mustWork = TRUE
+  )
+}
+
+if (!file.exists(report_path)) {
+  stop("report.parquet not found at: ", report_path)
+}
+
+message("Using DIA-NN report: ", report_path)
+
+# ==================================================
+# Load + filter DIA‑NN report
+# ==================================================
+
+report <- arrow::read_parquet(report_path) |>
+  dplyr::filter(
+    Decoy == 0,
+    PG.Q.Value <= 0.01
+  )
+
+message("DIA‑NN report loaded")
+
+# ==================================================
+# Build peptide list per protein group (REQUIRED)
+# ==================================================
+
+peptides_clean <- report |>
+  dplyr::select(Stripped.Sequence, Protein.Group) |>
+  tidyr::separate_rows(Protein.Group, sep = ";") |>
+  dplyr::distinct() |>
+  dplyr::group_by(Protein.Group) |>
+  dplyr::summarise(
+    Peptide_List = list(Stripped.Sequence),
+    .groups = "drop"
+  )
+
+message(
+  "Peptide list generated for ",
+  nrow(peptides_clean),
+  " protein groups"
+)
+
+# ==================================================
+# FASTA resolution (PARAM → relative search)  ✅ FIXED ONLY HERE
+# ==================================================
+
+fasta_candidates <- character(0)
+
+if (!is.null(params$fasta_path)) {
+
+  fasta_param <- normalizePath(
+    params$fasta_path,
+    winslash = "/",
+    mustWork = TRUE
+  )
+
+  if (dir.exists(fasta_param)) {
+    fasta_candidates <- list.files(
+      fasta_param,
+      pattern = "\\.(fa|fasta|faa)$",
+      full.names = TRUE,
+      ignore.case = TRUE
+    )
+  } else {
+    fasta_candidates <- fasta_param
+  }
+
+  message("FASTA provided via parameter")
+
+} else {
+
+  fasta_dirs <- c(
+    file.path(script_root, "data", "FASTA"),
+    file.path(script_root, "FASTA"),
+    file.path(dirname(report_path), "FASTA")
+  )
+
+  for (d in fasta_dirs) {
+    d <- normalizePath(d, winslash = "/", mustWork = FALSE)
+    if (dir.exists(d)) {
+      fasta_candidates <- c(
+        fasta_candidates,
+        list.files(
+          d,
+          pattern = "\\.(fa|fasta|faa)$",
+          full.names = TRUE,
+          ignore.case = TRUE
+        )
+      )
+    }
+  }
+}
+
+if (length(fasta_candidates) == 0) {
+  stop("No FASTA file found")
+}
+
+# Prefer non‑contaminant FASTA
+good <- !grepl("crap|contaminant", basename(fasta_candidates), ignore.case = TRUE)
+if (any(good)) fasta_candidates <- fasta_candidates[good]
+
+# Most recent FASTA wins
+fasta_path <- fasta_candidates[which.max(file.info(fasta_candidates)$mtime)]
+message("Using FASTA: ", fasta_path)
+
+# ==================================================
+# Load FASTA reference
+# ==================================================
+
+fasta_ref <- microseq::readFasta(fasta_path) |>
+  tidyr::separate(Header, into = c(NA, "Protein.Group", "Protein", "Name")) |>
+  tidyr::unite(Protein.Name, Protein, Name, sep = "_") |>
+  dplyr::mutate(Total_Len = nchar(Sequence))
+
+message("FASTA loaded: ", basename(fasta_path))
+
+# ==================================================
+# Final global setup
+# ==================================================
+
+file_palette <- colorRampPalette(cb_palette)(
+  dplyr::n_distinct(report$Run)
+)
+
+report <- report |>
+  dplyr::mutate(
+    Run = factor(Run, levels = unique(Run))
+  )
+
+message("Loading stage completed successfully")
+
+```
+
+```{r}
+#| label: layout control
+
+# --------------------------------------------------
+# Global layout control
+# --------------------------------------------------
+
+# Number of acquisition runs
+n_runs <- dplyr::n_distinct(report$Run)
+
+# Faceting becomes unreadable beyond this threshold
+IS_LARGE_BATCH <- n_runs > 12
+
+# --------------------------------------------------
+# Global panel layout presets
+# --------------------------------------------------
+
+PANELS_PER_ROW <- 3
+
+# --------------------------------------------------
+# Global aspect-ratio presets
+# --------------------------------------------------
+
+AR_DENSITY <- 0.5
+AR_BOXPLOT <- 0.35
+AR_HIST    <- 0.6
+
+
+# --------------------------------------------------
+# Adaptive legend helpers (CORRECT ggplot2 pattern)
+# --------------------------------------------------
+
+legend_fill <- function() {
+  list(
+    guides(
+      fill = guide_legend(
+        ncol  = ifelse(IS_LARGE_BATCH, 2, 1),
+        byrow = TRUE
+      )
+    ),
+    theme(
+      legend.position = "right",
+      legend.text = element_text(
+        size = ifelse(IS_LARGE_BATCH, 7, 10)
+      ),
+      legend.key.size = unit(
+        ifelse(IS_LARGE_BATCH, 0.35, 0.6),
+        "cm"
+      ),
+      legend.title = element_blank()
+    )
+  )
+}
+
+legend_color <- function() {
+  list(
+    guides(
+      color = guide_legend(
+        ncol  = ifelse(IS_LARGE_BATCH, 2, 1),
+        byrow = TRUE
+      )
+    ),
+    theme(
+      legend.position = "right",
+      legend.text = element_text(
+        size = ifelse(IS_LARGE_BATCH, 7, 10)
+      ),
+      legend.key.size = unit(
+        ifelse(IS_LARGE_BATCH, 0.35, 0.6),
+        "cm"
+      )
+    )
+  )
+}
+```
+
+
+
+## 3.Precursor and protein groups identified
+
+```{r}
+#| label: identification-processing
+
+# --------------------------------------------------
+# Identification depth per run
+# Purpose:
+# - Quantify identification depth at precursor and protein-group levels
+# - Compare runs while preserving per-run information
+# - Adapt layout based on batch size
+# --------------------------------------------------
+
+# -------------------------------
+# Compute number of unique identifications
+# -------------------------------
+
+N.id <- report %>%
+  select(Run, Precursor.Id, Protein.Group) %>%
+  pivot_longer(-Run, names_to = "Level", values_to = "ID") %>%
+  group_by(Run, Level) %>%
+  distinct(ID) %>%
+  summarise(n = n(), .groups = "drop")
+
+# -------------------------------
+# Compute summary statistics across runs
+# -------------------------------
+
+avgmax <- N.id %>%
+  group_by(Level) %>%
+  summarise(
+    mean_n = mean(n),
+    max_n  = max(n),
+    .groups = "drop"
+  )
+
+# -------------------------------
+# Plot identification counts
+# -------------------------------
+
+p <- ggplot(N.id, aes(x = Run, y = n)) +
+  geom_col(fill = "grey85", color = "black") +
+
+  # ✅ Conditional layout:
+  # - small batch → side-by-side
+  # - large batch → stacked full width
+  facet_wrap(
+    ~ Level,
+    scales = "free_y",
+    ncol = ifelse(IS_LARGE_BATCH, 1, 2)
+  ) +
+
+  geom_hline(
+    data = avgmax,
+    aes(yintercept = mean_n),
+    color = "blue",
+    linetype = "dotted",
+    linewidth = 1
+  ) +
+  geom_text(
+    data = avgmax,
+    aes(
+      x = -Inf,
+      y = mean_n,
+      label = paste0("AVG (", round(mean_n, 0), ")")
+    ),
+    color = "blue",
+    fontface = "bold",
+    hjust = -0.05,
+    vjust = -0.5
+  ) +
+
+  geom_hline(
+    data = avgmax,
+    aes(yintercept = max_n),
+    color = "red",
+    linewidth = 0.8
+  ) +
+  geom_text(
+    data = avgmax,
+    aes(
+      x = Inf,
+      y = Inf,
+      label = paste0("MAX (", round(max_n, 0), ")")
+    ),
+    color = "red",
+    fontface = "bold",
+    hjust = 1.05,
+    vjust = 1.2
+  ) +
+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.08))) +
+  labs(
+    title = "Identification Depth per Run",
+    x = "Run",
+    y = "Number of Identifications"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = ifelse(IS_LARGE_BATCH, 90, 45),
+      hjust = 1,
+      size  = ifelse(IS_LARGE_BATCH, 6, 8)
+    )
+  )
+
+print(p)
+```
+
+## 3.1.Relative Abundance
+
+### Relative contribution of the ten highest‑intensity genes to the total protein intensity.
+
+```{r}
+#| label: Gene abundance composition graph
+
+# --------------------------------------------------
+# Gene-level relative abundance per run
+# --------------------------------------------------
+
+# --------------------------------------------------
+# Create gene map from FASTA (SAFE: does NOT alter fasta_ref)
+# --------------------------------------------------
+
+gene_map <- microseq::readFasta(fasta_path) %>%
+  dplyr::mutate(
+    Gene_from_fasta = ifelse(
+      grepl("GN=", Header),
+      sub(".*GN=([^ ]+).*", "\\1", Header),
+      NA_character_
+    )
+  ) %>%
+  tidyr::separate(
+    Header,
+    into = c("db", "Protein.Group", "Protein", "Name"),
+    sep = "\\|",
+    extra = "merge"
+  ) %>%
+  dplyr::select(Protein.Group, Gene_from_fasta)
+
+# --------------------------------------------------
+# Add Genes column to report (robust + explicit)
+# --------------------------------------------------
+
+report <- report %>%
+  dplyr::left_join(gene_map, by = "Protein.Group") %>%
+  dplyr::mutate(
+    Genes = dplyr::case_when(
+      grepl("^CON__", Protein.Group) ~ Protein.Group,
+      !is.na(Gene_from_fasta)        ~ Gene_from_fasta,
+      TRUE                           ~ NA_character_
+    )
+  ) %>%
+  dplyr::select(-Gene_from_fasta)
+
+# -------------------------------
+# Prepare relative-abundance data
+# -------------------------------
+
+abundance <- report %>%
+  dplyr::select(Run, PG.MaxLFQ, Protein.Group, Genes) %>%
+  dplyr::mutate(
+    Genes = dplyr::if_else(
+      grepl("CON__", Protein.Group) &
+        (is.na(Genes) | Genes == ""),
+      Protein.Group,
+      Genes
+    )
+  ) %>%
+  dplyr::select(-Protein.Group) %>%
+  dplyr::group_by(Run) %>%
+  dplyr::mutate(
+    Proportion = PG.MaxLFQ / sum(PG.MaxLFQ, na.rm = TRUE)
+  ) %>%
+  dplyr::group_by(Run, Genes) %>%
+  dplyr::summarise(
+    Proportion = sum(Proportion),
+    .groups = "drop"
+  ) %>%
+  dplyr::group_by(Run) %>%
+  dplyr::arrange(desc(Proportion), .by_group = TRUE) %>%
+  dplyr::mutate(
+    Genes = dplyr::if_else(row_number() <= 10, Genes, "Others")
+  ) %>%
+  dplyr::group_by(Run, Genes) %>%
+  dplyr::summarise(
+    Proportion = sum(Proportion),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    Genes = factor(
+      Genes,
+      levels = c(setdiff(unique(Genes), "Others"), "Others")
+    )
+  )
+
+# -------------------------------
+# Color palette
+# -------------------------------
+
+top_genes <- setdiff(levels(abundance$Genes), "Others")
+
+gene_palette <- c(
+  colorRampPalette(cb_palette)(length(top_genes)),
+  "grey95"
+)
+
+names(gene_palette) <- c(top_genes, "Others")
+
+# -------------------------------
+# Plot: relative abundance per run
+# -------------------------------
+
+p <- ggplot(
+  abundance,
+  aes(x = Run, y = Proportion, fill = Genes)
+) +
+  geom_col(position = position_stack(reverse = TRUE)) +
+  scale_y_continuous(
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.1),
+    labels = scales::percent
+  ) +
+  scale_fill_manual(values = gene_palette) +
+  labs(
+    title = "Relative Gene Abundance per Run",
+    x = "Run",
+    y = "Relative Abundance (%)",
+    fill = "Genes"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = ifelse(IS_LARGE_BATCH, 90, 45),
+      hjust = 1,
+      size  = ifelse(IS_LARGE_BATCH, 6, 8)
+    )
+  ) +
+  legend_fill()
+
+print(p)
+```
+
+
+## 3.2.Protein coverage
+
+#### Note: For visualization purposes, this section displays only a selected subset of proteins with the highest sequence coverage. The full protein coverage dataset, including all protein groups and their associated coverage metrics, is exported in CSV format and saved during report generation.
+
+```{r}
+#| label: Protein coverage
+#| echo: true
+#| results: asis
+
+# ==================================================
+# Protein sequence coverage
+# - CSV export includes peptide evidence
+# - HTML table excludes peptide column
+# ==================================================
+
+# --------------------------------------------------
+# Coverage calculation function (SAFE)
+# --------------------------------------------------
+
+calculate_coverage <- function(seq, peps) {
+
+  if (is.null(seq) || is.na(seq)) return(0L)
+  if (is.null(peps) || length(peps) == 0) return(0L)
+
+  mask <- integer(nchar(seq))
+
+  for (p in peps) {
+    if (is.na(p) || !nzchar(p)) next
+    res <- stringr::str_locate_all(seq, stringr::fixed(p))[[1]]
+    if (!is.null(res) && nrow(res) > 0) {
+      for (i in seq_len(nrow(res))) {
+        mask[res[i, 1]:res[i, 2]] <- 1L
+      }
+    }
+  }
+
+  sum(mask)
+}
+
+# --------------------------------------------------
+# Sanity checks
+# --------------------------------------------------
+
+if (!exists("fasta_ref")) {
+  stop("FASTA reference not loaded — cannot compute protein coverage")
+}
+
+if (!exists("peptides_clean")) {
+  stop("Peptide list not available — cannot compute protein coverage")
+}
+
+if (!exists("results_dir")) {
+  stop("results_dir not defined — pipeline output path missing")
+}
+
+# --------------------------------------------------
+# Compute coverage
+# --------------------------------------------------
+
+coverage_results <- fasta_ref %>%
+  left_join(peptides_clean, by = "Protein.Group") %>%
+  mutate(
+    Aminoacids_Covered = purrr::map2_int(
+      Sequence,
+      Peptide_List,
+      calculate_coverage
+    ),
+    Coverage_Pct = if_else(
+      Total_Len > 0,
+      (Aminoacids_Covered / Total_Len) * 100,
+      0
+    ),
+    Peptides = purrr::map_chr(
+      Peptide_List,
+      ~ if (is.null(.x) || length(.x) == 0)
+        NA_character_
+      else paste(sort(unique(.x)), collapse = ";")
+    )
+  ) %>%
+  select(
+    Protein.Group,
+    Protein.Name,
+    Total_Len,
+    Aminoacids_Covered,
+    Coverage_Pct,
+    Peptides
+  )
+
+if (nrow(coverage_results) == 0) {
+  stop("Protein coverage table is empty — computation failed")
+}
+
+# --------------------------------------------------
+# Export CSV (✅ ALWAYS INTO output/Results)
+# --------------------------------------------------
+
+output_csv <- file.path(
+  results_dir,
+  paste0(
+    "protein_coverage_with_peptides_",
+    format(Sys.time(), "%Y%m%d_%H%M%S"),
+    ".csv"
+  )
+)
+
+write.csv(coverage_results, output_csv, row.names = FALSE)
+message("Protein coverage CSV saved to: ", output_csv)
+
+# --------------------------------------------------
+# Render HTML table (NO peptide column)
+# --------------------------------------------------
+
+coverage_results %>%
+  select(-Peptides) %>%
+  arrange(desc(Coverage_Pct)) %>%
+  slice_head(n = 100) %>%
+  gt() %>%
+  tab_header(
+    title    = md("**Protein Sequence Coverage Summary (Top 100)**"),
+    subtitle = "Full peptide evidence exported as CSV in output/Results"
+  ) %>%
+  cols_label(
+    Protein.Group      = "Accession",
+    Protein.Name       = "Protein Name",
+    Total_Len          = "Length (aa)",
+    Aminoacids_Covered = "Covered AA",
+    Coverage_Pct       = "Coverage (%)"
+  ) %>%
+  cols_width(
+    Coverage_Pct ~ px(260)
+  ) %>%
+  gtExtras::gt_plt_bar_pct(
+    column     = Coverage_Pct,
+    scaled     = TRUE,
+    fill       = "#56B4E9",
+    background = "white",
+    labels     = TRUE
+  ) %>%
+  tab_options(
+    table.width               = pct(100),
+    container.height          = px(500),
+    container.overflow.y      = "scroll",
+    data_row.padding          = px(2),
+    column_labels.font.weight = "bold"
+  )
+
+```
+
+## 3.2.1.Protein coverage representation
+
+```{r}
+#| label: Coverage graph
+
+# --------------------------------------------------
+# Protein sequence coverage — global density
+# Purpose:
+# - Visualize the global distribution of protein sequence coverage
+# - Identify skewness, multimodality, or coverage bias
+# - Assess overall proteome coverage quality
+# --------------------------------------------------
+
+# Remove proteins with zero coverage
+coverage.results.graph <- coverage_results %>%
+  filter(Coverage_Pct > 0)
+
+p <- ggplot(
+  coverage.results.graph,
+  aes(x = Coverage_Pct)
+) +
+  # Kernel density estimate
+  geom_density(
+    fill = "#56B4E9",
+    color = "black",
+    alpha = 0.8
+  ) +
+
+  # Full coverage range with padding
+  scale_x_continuous(
+    breaks = seq(0, 100, 10),
+    limits = c(-1, 101)
+  ) +
+
+  labs(
+    title = "Proteome Coverage Density Distribution",
+    x = "Sequence Coverage (%)",
+    y = "Density"
+  ) +
+
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA),
+    plot.title = element_text(face = "bold"),
+    aspect.ratio = AR_DENSITY
+  )
+
+print(p)
+```
+
+## 4.Charge distribution
+
+### It reflects the chemical nature of the peptide and the efficiency of the ionization process. Shifts in distribution can indicate changes in sample matrix or instrument status.
+
+```{r}
+#| label: Charge distribution
+
+# --------------------------------------------------
+# Precursor charge-state distribution
+# Purpose:
+# - Assess ionization behavior and charge-state patterns
+# - Preserve per-run QC information
+# - Use a color-blind–safe palette for charge states
+# - Avoid page spam by batching plots (4 per row)
+# --------------------------------------------------
+
+# -------------------------------
+# Compute charge distribution per run
+# -------------------------------
+
+chrg <- report %>%
+  select(Run, Precursor.Charge) %>%
+  group_by(Run, Precursor.Charge) %>%
+  summarise(n = n(), .groups = "drop_last") %>%
+  mutate(pct = n / sum(n)) %>%
+  ungroup()
+
+# Ensure stable factor levels
+chrg <- chrg %>%
+  mutate(Precursor.Charge = factor(Precursor.Charge))
+
+# Define charge-state colors (recycled if needed)
+charge_colors <- setNames(
+  colorRampPalette(cb_palette)(
+    length(levels(chrg$Precursor.Charge))
+  ),
+  levels(chrg$Precursor.Charge)
+)
+
+# -------------------------------
+# Plot logic
+# -------------------------------
+
+if (!IS_LARGE_BATCH) {
+
+  # ---- SMALL BATCH ----
+  # Single faceted plot is readable
+
+  p <- ggplot(
+    chrg,
+    aes(
+      x = Precursor.Charge,
+      y = pct,
+      fill = Precursor.Charge
+    )
+  ) +
+    geom_col(color = "black") +
+    facet_wrap(~ Run, scales = "free_y") +
+    scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values = charge_colors) +
+    labs(
+      title = "Charge State Distribution per Run",
+      x = "Precursor charge",
+      y = "Percentage (%)",
+      fill = "Charge state"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+
+  print(p)
+
+} else {
+
+  # ---- LARGE BATCH ----
+  # Batch runs into pages with 4 panels per row
+
+  runs_vec <- unique(chrg$Run)
+
+  run_groups <- split(
+    runs_vec,
+    ceiling(seq_along(runs_vec) / PANELS_PER_ROW)
+  )
+
+  for (runs_subset in run_groups) {
+
+    p <- ggplot(
+      chrg %>% dplyr::filter(Run %in% runs_subset),
+      aes(
+        x = Precursor.Charge,
+        y = pct,
+        fill = Precursor.Charge
+      )
+    ) +
+      geom_col(color = "black") +
+      facet_wrap(
+        ~ Run,
+        scales = "free_y",
+        ncol = PANELS_PER_ROW
+      ) +
+      scale_y_continuous(labels = scales::percent) +
+      scale_fill_manual(values = charge_colors) +
+      labs(
+        title = "Charge State Distribution per Run",
+        x = "Precursor charge",
+        y = "Percentage (%)",
+        fill = "Charge state"
+      ) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+
+    print(p)
+  }
+}
+```
+
+## 5.Peptide Length
+
+### Trypsin typically produces peptides between 7 and 30 amino acids. It acts as a critical filter for search engines; peptides that are too short may not be unique, while those that are too long may ionize and fragment poorly, making them difficult to identify.
+
+```{r}
+#| label: Peptide aas
+
+# --------------------------------------------------
+# Peptide length QC
+# Purpose:
+# - Assess digestion efficiency and peptide-size distribution
+# - Preserve per-run peptide length distributions
+# - Display mean peptide length per run (rounded)
+# - Avoid page spam by batching plots (4 per row)
+# --------------------------------------------------
+
+# -------------------------------
+# Compute peptide length per run
+# -------------------------------
+
+pep.lgt <- report %>%
+  select(Run, Stripped.Sequence) %>%
+  mutate(
+    seq_length = nchar(Stripped.Sequence)
+  )
+
+# -------------------------------
+# Compute per-run mean peptide length
+# -------------------------------
+
+pep.lgt.stat <- pep.lgt %>%
+  group_by(Run) %>%
+  summarise(
+    mean_val = mean(seq_length, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# -------------------------------
+# Plot logic
+# -------------------------------
+
+if (!IS_LARGE_BATCH) {
+
+  # ---- SMALL BATCH ----
+  # Single faceted plot is readable
+
+  p <- ggplot(
+    pep.lgt,
+    aes(x = seq_length)
+  ) +
+    geom_histogram(
+      binwidth = 1,
+      fill = "grey70",
+      color = "black"
+    ) +
+    facet_wrap(~ Run, scales = "free_y") +
+    geom_vline(
+      data = pep.lgt.stat,
+      aes(xintercept = mean_val),
+      color = "red",
+      linetype = "dashed",
+      linewidth = 1
+    ) +
+    geom_text(
+      data = pep.lgt.stat,
+      aes(
+        x = mean_val,
+        y = Inf,
+        label = paste0("Mean = ", round(mean_val, 0))
+      ),
+      vjust = 2,
+      color = "red",
+      fontface = "bold"
+    ) +
+    theme_minimal() +
+    labs(
+      title = "Peptide Length Distribution per Run",
+      x = "Peptide length (aa)",
+      y = "Count"
+    )
+
+  print(p)
+
+} else {
+
+  # ---- LARGE BATCH ----
+  # Batch runs into pages with 4 panels per row
+
+  runs_vec <- unique(pep.lgt$Run)
+
+  run_groups <- split(
+    runs_vec,
+    ceiling(seq_along(runs_vec) / PANELS_PER_ROW)
+  )
+
+  for (runs_subset in run_groups) {
+
+    p <- ggplot(
+      pep.lgt %>% dplyr::filter(Run %in% runs_subset),
+      aes(x = seq_length)
+    ) +
+      geom_histogram(
+        binwidth = 1,
+        fill = "grey70",
+        color = "black"
+      ) +
+      geom_vline(
+        data = pep.lgt.stat %>% dplyr::filter(Run %in% runs_subset),
+        aes(xintercept = mean_val),
+        color = "red",
+        linetype = "dashed",
+        linewidth = 1
+      ) +
+      geom_text(
+        data = pep.lgt.stat %>% dplyr::filter(Run %in% runs_subset),
+        aes(
+          x = mean_val,
+          y = Inf,
+          label = paste0("Mean = ", round(mean_val, 0))
+        ),
+        vjust = 2,
+        color = "red",
+        fontface = "bold"
+      ) +
+      facet_wrap(
+        ~ Run,
+        scales = "free_y",
+        ncol = PANELS_PER_ROW
+      ) +
+      theme_minimal() +
+      labs(
+        title = "Peptide Length Distribution per Run",
+        x = "Peptide length (aa)",
+        y = "Count"
+      )
+
+    print(p)
+  }
+}
+```
+
+## 6.Ids vs RT
+
+### This maps identified peptides across the liquid chromatography (LC) gradient. It identifies whether protein detection is consistent across the run or clustered in specific regions. It is also essential for RT alignment between samples to minimize missing data.
+
+```{r}
+#| label: Identifications over RT
+
+# --------------------------------------------------
+# Identifications over retention time (RT)
+# Purpose:
+# - Assess how peptide identifications are distributed
+#   across the LC gradient
+# - Detect clustering, gaps, or RT compression
+# - Preserve per-run RT profiles
+# - Avoid page spam by batching plots (max 3 per row)
+# --------------------------------------------------
+
+# -------------------------------
+# Prepare RT data
+# -------------------------------
+
+idvsrt <- report %>% 
+  select(Run, Precursor.Id, RT) %>%
+  mutate(
+    RT = round(RT, digits = 1)   # Reduce bin sparsity
+  )
+
+# -------------------------------
+# Plot logic
+# -------------------------------
+
+if (!IS_LARGE_BATCH) {
+
+  # ---- SMALL BATCH ----
+  # Single faceted plot is readable
+
+  p <- ggplot(
+    idvsrt,
+    aes(x = RT)
+  ) +
+    geom_histogram(
+      bins = 60,
+      fill = "grey70",
+      color = "black"
+    ) +
+    facet_wrap(~ Run, scales = "free_y") +
+    theme_minimal() +
+    labs(
+      title = "Identifications over Retention Time per Run",
+      x = "Retention Time",
+      y = "Number of Identifications"
+    ) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+
+  print(p)
+
+} else {
+
+  # ---- LARGE BATCH ----
+  # Batch runs into pages with a MAX of 3 panels per row
+  # (RT histograms require more horizontal space)
+
+  MAX_PANELS_RT <- 3
+  runs_vec <- unique(idvsrt$Run)
+
+  run_groups <- split(
+    runs_vec,
+    ceiling(seq_along(runs_vec) / MAX_PANELS_RT)
+  )
+
+  for (runs_subset in run_groups) {
+
+    p <- ggplot(
+      idvsrt %>% dplyr::filter(Run %in% runs_subset),
+      aes(x = RT)
+    ) +
+      geom_histogram(
+        bins = 60,
+        fill = "grey70",
+        color = "black"
+      ) +
+      facet_wrap(
+        ~ Run,
+        scales = "free_y",
+        ncol = MAX_PANELS_RT
+      ) +
+      theme_minimal() +
+      labs(
+        title = "Identifications over Retention Time per Run",
+        x = "Retention Time",
+        y = "Number of Identifications"
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+
+    print(p)
+  }
+}
+```
+
+## 7. Chromatographic Performance and Retention Time Stability
+
+### This section evaluates chromatographic peak quality and internal standard behavior using peak width metrics and trypsin autolysis peptides. Together, these indicators reflect separation efficiency, peak shape consistency, and the stability of elution and signal for internal reference peptides across runs.
+
+## 7.1 Peak Shape and Chromatographic Resolution (FWHM)
+
+```{r}
+#| label: Peak profile – FWHM
+
+# --------------------------------------------------
+# 7.1 Peak Shape and Chromatographic Resolution (FWHM)
+# --------------------------------------------------
+
+# Convert FWHM from minutes to seconds
+FWHM <- report %>% 
+  mutate(FWHM = 60 * round(FWHM, digits = 3))
+
+# Compute median FWHM per run
+FWHM.stat <- FWHM %>%
+  group_by(Run) %>%
+  summarise(
+    median_val = median(FWHM, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# -------------------------------
+# Plot logic
+# -------------------------------
+
+if (!IS_LARGE_BATCH) {
+
+  # ---- SMALL BATCH ----
+  # Single faceted plot (full detail)
+
+  p <- ggplot(FWHM, aes(x = FWHM)) +
+    geom_histogram(
+      bins = 60,
+      fill = "grey70",
+      color = "black"
+    ) +
+    facet_wrap(~ Run, scales = "free_y") +
+    geom_vline(
+      data = FWHM.stat,
+      aes(xintercept = median_val),
+      color = "red",
+      linetype = "dashed",
+      linewidth = 1
+    ) +
+    geom_text(
+      data = FWHM.stat,
+      aes(
+        x = median_val,
+        y = Inf,
+        label = paste0("Median = ", round(median_val, 0))
+      ),
+      vjust = 2,
+      color = "red",
+      fontface = "bold"
+    ) +
+    coord_cartesian(xlim = c(0, 12)) +
+    theme_minimal() +
+    labs(
+      title = "FWHM Distribution per Run",
+      x = "FWHM (s)",
+      y = "Count"
+    )
+
+  print(p)
+
+} else {
+
+  # ---- LARGE BATCH ----
+  # Batch runs into pages with MAX 3 panels per row
+  # (FWHM histograms need more horizontal space)
+
+  MAX_PANELS_FWHM <- 3
+  runs_vec <- unique(FWHM$Run)
+
+  run_groups <- split(
+    runs_vec,
+    ceiling(seq_along(runs_vec) / MAX_PANELS_FWHM)
+  )
+
+  for (runs_subset in run_groups) {
+
+    p <- ggplot(
+      FWHM %>% dplyr::filter(Run %in% runs_subset),
+      aes(x = FWHM)
+    ) +
+      geom_histogram(
+        bins = 60,
+        fill = "grey70",
+        color = "black"
+      ) +
+      geom_vline(
+        data = FWHM.stat %>% dplyr::filter(Run %in% runs_subset),
+        aes(xintercept = median_val),
+        color = "red",
+        linetype = "dashed",
+        linewidth = 1
+      ) +
+      geom_text(
+        data = FWHM.stat %>% dplyr::filter(Run %in% runs_subset),
+        aes(
+          x = median_val,
+          y = Inf,
+          label = paste0("Median = ", round(median_val, 0))
+        ),
+        vjust = 2,
+        color = "red",
+        fontface = "bold"
+      ) +
+      facet_wrap(
+        ~ Run,
+        scales = "free_y",
+        ncol = MAX_PANELS_FWHM
+      ) +
+      coord_cartesian(xlim = c(0, 12)) +
+      theme_minimal() +
+      labs(
+        title = "FWHM Distribution per Run",
+        x = "FWHM (s)",
+        y = "Count"
+      )
+
+    print(p)
+  }
+}
+```
+
+
+## 7.2 Peak Elution Width (Base Width)
+
+```{r}
+#| label: Peak profile – Base width
+
+# --------------------------------------------------
+# 7.2 Peak Elution Width (Base Width)
+# --------------------------------------------------
+
+# Compute peak base width (RT.Stop − RT.Start), converted to seconds
+report.peakbase <- report %>% 
+  select(Run, Precursor.Id, RT.Start, RT.Stop) %>%
+  mutate(
+    Peakbase = round(RT.Stop - RT.Start, 4) * 60
+  )
+
+# Compute mean peak base width per run
+report.peakbase.stat <- report.peakbase %>%
+  group_by(Run) %>%
+  summarise(
+    mean_val = mean(Peakbase, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# -------------------------------
+# Plot logic
+# -------------------------------
+
+if (!IS_LARGE_BATCH) {
+
+  # ---- SMALL BATCH ----
+  # Single faceted plot
+
+  p <- ggplot(report.peakbase, aes(x = Peakbase)) +
+    geom_histogram(
+      binwidth = 0.1,
+      fill = "grey70",
+      color = "black"
+    ) +
+    facet_wrap(~ Run, scales = "free_y") +
+    geom_vline(
+      data = report.peakbase.stat,
+      aes(xintercept = mean_val),
+      color = "red",
+      linetype = "dashed",
+      linewidth = 1
+    ) +
+    geom_text(
+      data = report.peakbase.stat,
+      aes(
+        x = mean_val,
+        y = Inf,
+        label = paste0("Mean = ", round(mean_val, 0))
+      ),
+      vjust = 2,
+      color = "red",
+      fontface = "bold"
+    ) +
+    theme_minimal() +
+    labs(
+      title = "Peak Base Width per Run",
+      x = "Peak base width (s)",
+      y = "Count"
+    )
+
+  print(p)
+
+} else {
+
+  # ---- LARGE BATCH ----
+  # Batch runs into pages with MAX 3 panels per row
+  # (base-width histograms need horizontal space)
+
+  MAX_PANELS_BASE <- 3
+  runs_vec <- unique(report.peakbase$Run)
+
+  run_groups <- split(
+    runs_vec,
+    ceiling(seq_along(runs_vec) / MAX_PANELS_BASE)
+  )
+
+  for (runs_subset in run_groups) {
+
+    p <- ggplot(
+      report.peakbase %>% dplyr::filter(Run %in% runs_subset),
+      aes(x = Peakbase)
+    ) +
+      geom_histogram(
+        binwidth = 0.1,
+        fill = "grey70",
+        color = "black"
+      ) +
+      geom_vline(
+        data = report.peakbase.stat %>% dplyr::filter(Run %in% runs_subset),
+        aes(xintercept = mean_val),
+        color = "red",
+        linetype = "dashed",
+        linewidth = 1
+      ) +
+      geom_text(
+        data = report.peakbase.stat %>% dplyr::filter(Run %in% runs_subset),
+        aes(
+          x = mean_val,
+          y = Inf,
+          label = paste0("Mean = ", round(mean_val, 0))
+        ),
+        vjust = 2,
+        color = "red",
+        fontface = "bold"
+      ) +
+      facet_wrap(
+        ~ Run,
+        scales = "free_y",
+        ncol = MAX_PANELS_BASE
+      ) +
+      theme_minimal() +
+      labs(
+        title = "Peak Base Width per Run",
+        x = "Peak base width (s)",
+        y = "Count"
+      )
+
+    print(p)
+  }
+}
+```
+
+
+## 7.3 Internal Standard Retention Time and Signal Stability
+
+### Trypsin autolysis peptides are used as internal standards to assess chromatographic and signal stability across acquisitions. Their retention time behavior and quantitative signal consistency provide an internal reference for evaluating run‑to‑run reproducibility independent of biological variability.
+
+## 7.3.1 Retention Time Reproducibility of Internal Standards
+
+```{r}
+#| label: Peak profile – Trypsin RT reproducibility
+
+# --------------------------------------------------
+# 7.3.1 Retention Time Reproducibility of Internal Standards
+# --------------------------------------------------
+
+RGB <- c(
+  "VATVSLPR2"             = "#0072B2",
+  "LSSPATLNSR2"           = "#E69F00",
+  "LGEHNIDVLEGNEQFINAAK3" = "#009E73"
+)
+
+# Determine RT range from full dataset
+rt_max <- ceiling(max(report$RT, na.rm = TRUE) * 1.05)
+rt_breaks <- seq(0, rt_max, by = 5)
+
+# Extract trypsin autolysis peptides
+report.tryp.RT <- report %>%
+  dplyr::filter(
+    stringr::str_detect(
+      Precursor.Id,
+      "VATVSLPR2|LSSPATLNSR2|LGEHNIDVLEGNEQFINAAK3"
+    )
+  ) %>%
+  dplyr::select(Run, Precursor.Id, RT)
+
+# -------------------------------
+# Plot (single, full-width figure)
+# -------------------------------
+
+if (nrow(report.tryp.RT) > 0) {
+
+  p <- ggplot(
+    report.tryp.RT,
+    aes(
+      x     = Run,
+      y     = RT,
+      group = Precursor.Id,
+      color = Precursor.Id
+    )
+  ) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 3, alpha = 0.5) +
+    scale_y_continuous(
+      limits = c(0, rt_max),
+      breaks = rt_breaks
+    ) +
+    scale_color_manual(values = RGB) +
+    labs(
+      title = "RT Reproducibility — Trypsin Autolysis Peptides",
+      x = "Run",
+      y = "Retention Time (min)"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    ) +
+    legend_color()
+
+  print(p)
+
+} else {
+  message("No trypsin autolysis peptides detected.")
+}
+```
+
+
+## 7.3.2 Quantitative Consistency of Internal Standard Peptide
+
+```{r}
+#| label: Peak profile – Trypsin quantitative signal
+
+# --------------------------------------------------
+# 7.3.2 Quantitative Consistency of Internal Standard Peptides
+# Purpose:
+# - Assess run-to-run signal stability of trypsin autolysis peptides
+# - Each peptide is shown as an independent full-width panel
+# --------------------------------------------------
+
+# Extract quantitative values of trypsin autolysis peptides
+report.tryp.quant <- report %>%
+  dplyr::filter(
+    stringr::str_detect(
+      Precursor.Id,
+      "VATVSLPR2|LSSPATLNSR2|LGEHNIDVLEGNEQFINAAK3"
+    )
+  ) %>%
+  dplyr::select(Run, Precursor.Id, Precursor.Quantity)
+
+# -------------------------------
+# Plot (one full-width panel per peptide)
+# -------------------------------
+
+if (nrow(report.tryp.quant) > 0) {
+
+  p <- ggplot(
+    report.tryp.quant,
+    aes(
+      x    = Run,
+      y    = Precursor.Quantity,
+      fill = Precursor.Id
+    )
+  ) +
+    geom_col(color = "black", width = 0.7) +
+    facet_wrap(
+      ~ Precursor.Id,
+      scales = "free_y",
+      ncol   = 1          # ✅ FULL WIDTH PER PEPTIDE
+    ) +
+    scale_fill_manual(values = RGB) +
+    labs(
+      title = "Trypsin Autolysis Peptide Signal Intensity",
+      x = "Run",
+      y = "Precursor Quantity"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.position = "none"
+    )
+
+  print(p)
+
+} else {
+
+  message("No quantitative signal detected for trypsin autolysis peptides.")
+
+}
+```
+
+## 8.Mass error (ppm)
+
+### Mass error is the deviation between the measured and theoretical mass, usually expressed in parts per million (ppm). High mass accuracy (e.g., \<5 ppm) drastically reduces the search space and the number of false positives by eliminating peptides that do not match the precise mass.
+
+```{r}
+#| label: Mass error
+
+# --------------------------------------------------
+# Mass error (ppm) QC
+# Purpose:
+# - Assess systematic mass accuracy and calibration quality
+# - Evaluate mass error distributions per run
+# - Verify centering around the theoretical 0 ppm target
+# - Avoid page spam by batching plots (max 3 per row)
+# --------------------------------------------------
+
+# -------------------------------
+# Compute mass error in ppm
+# -------------------------------
+
+mass.error <- report %>% 
+  select(Run, Precursor.Mz, Ms1.Apex.Mz.Delta) %>%
+  mutate(
+    Mass.Error.PPM = round(
+      (Ms1.Apex.Mz.Delta / Precursor.Mz) * 1e6,
+      2
+    )
+  ) %>%
+  filter(Mass.Error.PPM != 0)
+
+# -------------------------------
+# Compute median mass error per run
+# -------------------------------
+
+mass.error.stat <- mass.error %>%
+  group_by(Run) %>%
+  summarise(
+    median_val = median(Mass.Error.PPM, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# -------------------------------
+# Plot logic
+# -------------------------------
+
+if (!IS_LARGE_BATCH) {
+
+  # ---- SMALL BATCH ----
+  # Single faceted plot
+
+  p <- ggplot(mass.error, aes(x = Mass.Error.PPM)) +
+    geom_histogram(
+      binwidth = 0.2,
+      fill = "steelblue",
+      color = "white"
+    ) +
+    geom_vline(
+      xintercept = 0,
+      linetype = "dashed",
+      color = "red",
+      linewidth = 1
+    ) +
+    geom_vline(
+      data = mass.error.stat,
+      aes(xintercept = median_val),
+      linetype = "dashed",
+      color = "darkred",
+      linewidth = 1
+    ) +
+    geom_text(
+      data = mass.error.stat,
+      aes(
+        x = median_val,
+        y = Inf,
+        label = paste0("Median = ", round(median_val, 2), " ppm")
+      ),
+      vjust = 2,
+      color = "darkred",
+      fontface = "bold"
+    ) +
+    facet_wrap(~ Run, scales = "free_y") +
+    coord_cartesian(xlim = c(-10, 10)) +
+    scale_x_continuous(breaks = seq(-10, 10, 2)) +
+    theme_minimal() +
+    labs(
+      title = "Mass Error Distribution per Run",
+      subtitle = "Centered at 0 ppm (Target)",
+      x = "Mass Error (ppm)",
+      y = "Count"
+    )
+
+  print(p)
+
+} else {
+
+  # ---- LARGE BATCH ----
+  # Batch runs into pages with MAX 3 panels per row
+
+  MAX_PANELS_MASS <- 3
+  runs_vec <- unique(mass.error$Run)
+
+  run_groups <- split(
+    runs_vec,
+    ceiling(seq_along(runs_vec) / MAX_PANELS_MASS)
+  )
+
+  for (runs_subset in run_groups) {
+
+    p <- ggplot(
+      mass.error %>% dplyr::filter(Run %in% runs_subset),
+      aes(x = Mass.Error.PPM)
+    ) +
+      geom_histogram(
+        binwidth = 0.2,
+        fill = "steelblue",
+        color = "white"
+      ) +
+      geom_vline(
+        xintercept = 0,
+        linetype = "dashed",
+        color = "red",
+        linewidth = 1
+      ) +
+      geom_vline(
+        data = mass.error.stat %>% dplyr::filter(Run %in% runs_subset),
+        aes(xintercept = median_val),
+        linetype = "dashed",
+        color = "darkred",
+        linewidth = 1
+      ) +
+      geom_text(
+        data = mass.error.stat %>% dplyr::filter(Run %in% runs_subset),
+        aes(
+          x = median_val,
+          y = Inf,
+          label = paste0("Median = ", round(median_val, 2), " ppm")
+        ),
+        vjust = 2,
+        color = "darkred",
+        fontface = "bold"
+      ) +
+      facet_wrap(
+        ~ Run,
+        scales = "free_y",
+        ncol = MAX_PANELS_MASS
+      ) +
+      coord_cartesian(xlim = c(-10, 10)) +
+      scale_x_continuous(breaks = seq(-10, 10, 2)) +
+      theme_minimal() +
+      labs(
+        title = "Mass Error Distribution per Run",
+        subtitle = "Centered at 0 ppm (Target)",
+        x = "Mass Error (ppm)",
+        y = "Count"
+      )
+
+    print(p)
+  }
+}
+```
+
+## 9.Digestion Efficiency (Missed Cleavage)
+
+### This measures the frequency of internal residues that were not cleaved by during digestion. High missed cleavage rates indicate incomplete proteolysis, which complicates the data by creating multiple peptide versions for the same protein, potentially affecting quantification accuracy.
+
+```{r}
+#| label: missed-cleavage
+
+# --------------------------------------------------
+# Missed cleavage QC
+# Purpose:
+# - Assess enzymatic digestion efficiency per run
+# - Estimate the fraction of peptides containing
+#   one or more missed tryptic cleavages
+# Interpretation:
+# - Low values indicate efficient digestion
+# - Elevated values indicate incomplete proteolysis
+# --------------------------------------------------
+
+# -------------------------------
+# Calculate missed cleavages per run
+# -------------------------------
+
+miss.c <- report %>%
+  select(Run, Stripped.Sequence) %>%
+  distinct() %>%
+  group_by(Run) %>%
+  mutate(
+    MissedCleavages = pmax(
+      0,
+      stringr::str_count(Stripped.Sequence, "(?<=[KR])(?!P)") - 1
+    )
+  ) %>%
+  summarise(
+    Total_sequences = n(),
+    With_missed = sum(MissedCleavages > 0),
+    pct_Missed.Tryptic.Cleavages = With_missed / Total_sequences,
+    .groups = "drop"
+  )
+
+# -------------------------------
+# Plot: fraction of missed cleavages per run
+# -------------------------------
+
+p <- ggplot(
+  miss.c,
+  aes(
+    x    = Run,
+    y    = pct_Missed.Tryptic.Cleavages,
+    fill = Run
+  )
+) +
+  geom_col(
+    color = "black",
+    width = 0.6
+  ) +
+  scale_fill_manual(values = file_palette) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 0.1),
+    limits = c(0, 0.80),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  labs(
+    title = "Missed Tryptic Cleavage Rate per Run",
+    x = "Run",
+    y = "Peptides with ≥1 missed cleavage (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = ifelse(IS_LARGE_BATCH, 90, 45),
+      hjust = 1,
+      size  = ifelse(IS_LARGE_BATCH, 6, 8)
+    )
+  ) +
+  legend_fill()
+
+print(p)
+```
+
+## 10.Intensity Distribution (Raw Data)
+
+### This shows the spread of signal abundances across the sample. It helps detect systematic biases or sample loading errors. Visualizing this distribution is the first step in determining the necessary normalization strategy to ensure valid comparisons between samples.
+
+```{r}
+#| label: Intensity distribution – precursor density and LFQ boxplot
+
+# --------------------------------------------------
+# Intensity distribution QC
+# Purpose:
+# - Inspect raw precursor intensity distributions (instrument-level signal)
+# - Assess between-run comparability after LFQ normalization
+# Layout:
+# - Two full-width plots stacked vertically
+# - No batching or faceting by run
+# --------------------------------------------------
+
+# ==================================================
+# RAW SIGNAL QC — PRECURSOR LEVEL (DENSITY)
+# ==================================================
+
+prec.density <- report %>%
+  select(Run, Precursor.Quantity) %>%
+  filter(
+    !is.na(Precursor.Quantity),
+    Precursor.Quantity > 0
+  )
+
+p_density <- ggplot(
+  prec.density,
+  aes(x = Precursor.Quantity, fill = Run)
+) +
+  geom_density(alpha = 0.25, color = NA) +
+  scale_x_log10() +
+  scale_fill_manual(values = file_palette) +
+  labs(
+    title = "Precursor Intensity Density (Raw Signal)",
+    x = "Precursor.Quantity (log10)",
+    y = "Density"
+  ) +
+  theme_classic() +
+  theme(aspect.ratio = AR_DENSITY) +
+  legend_fill()
+
+print(p_density)
+
+# ==================================================
+# NORMALIZATION QC — PROTEIN LEVEL (LFQ BOXPLOT)
+# ==================================================
+
+Intensity.boxplot <- report %>%
+  select(Run, PG.MaxLFQ) %>%
+  filter(
+    !is.na(PG.MaxLFQ),
+    PG.MaxLFQ > 0
+  )
+
+p_box <- ggplot(
+  Intensity.boxplot,
+  aes(
+    x    = Run,
+    y    = log10(PG.MaxLFQ),
+    fill = Run
+  )
+) +
+  geom_boxplot(
+    outlier.alpha = 0.25,
+    width = 0.7,
+    color = "black"
+  ) +
+  scale_fill_manual(values = file_palette) +
+  labs(
+    title = "Protein Intensity Distribution (LFQ-normalized)",
+    x = "Run",
+    y = "PG.MaxLFQ (log10)"
+  ) +
+  theme_classic() +
+  theme(
+    aspect.ratio = AR_BOXPLOT,
+    axis.text.x = element_text(
+      angle = ifelse(IS_LARGE_BATCH, 90, 45),
+      hjust = 1,
+      size  = ifelse(IS_LARGE_BATCH, 6, 8)
+    )
+  ) +
+  legend_fill()
+
+print(p_box)
+```
+
+## 11.Data completeness
+
+```{r}
+#| label: Data completeness
+
+# --------------------------------------------------
+# Run × Precursor matrix
+# --------------------------------------------------
+
+data.complt <- report %>%
+  select(Run, Precursor.Id, Precursor.Quantity) %>%
+  distinct() %>%
+  pivot_wider(
+    names_from  = Precursor.Id,
+    values_from = Precursor.Quantity
+  )
+
+# --------------------------------------------------
+# Data completeness (run × precursor)
+# --------------------------------------------------
+
+n_runs       <- n_distinct(data.complt$Run)
+n_precursors <- ncol(data.complt) - 1
+
+total_possible <- n_runs * n_precursors
+observed       <- sum(!is.na(data.complt[-1]))
+
+data.completeness.table <- tibble(
+  Metric = c(
+    "Number of runs",
+    "Number of precursors",
+    "Total possible values (Run × Precursor)",
+    "Observed values",
+    "Data completeness (%)"
+  ),
+  Value = c(
+    n_runs,
+    n_precursors,
+    total_possible,
+    observed,
+    observed / total_possible * 100
+  )
+) %>%
+  gt() %>%
+  tab_header(
+    title = md("**Precursor‑Level Data Completeness**"),
+    subtitle = "Computed as (number of runs × number of precursors)"
+  ) %>%
+  fmt_integer(
+    rows = Metric != "Data completeness (%)"
+  ) %>%
+  fmt_number(
+    rows = Metric == "Data completeness (%)",
+    decimals = 1
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(rows = Metric == "Data completeness (%)")
+  )
+
+
+data.completeness.table
+```
+
+## 12.Session info
+
+### The following information summarizes the software environment used to generate this report and ensures full reproducibility of the analyses presented.
+
+```{r}
+#| label: Session information
+
+
+# Capture basic execution metadata
+session_date <- Sys.time()
+
+# R version
+r_version <- R.version.string
+
+# RStudio version (if running inside RStudio)
+rstudio_version <- if (requireNamespace("rstudioapi", quietly = TRUE) &&
+                       rstudioapi::isAvailable()) {
+  rstudioapi::versionInfo()$version
+} else {
+  NA
+}
+
+quarto_exec <- Sys.getenv("QUARTO_EXEC", unset = "quarto")
+
+quarto_version <- tryCatch(
+  system2(quarto_exec, "--version", stdout = TRUE),
+  error = function(e) NA
+)
+
+# Installed and loaded packages with versions
+pkg_info <- sessionInfo()$otherPkgs
+packages <- tibble(
+  Package = names(pkg_info),
+  Version = vapply(pkg_info, function(x) x$Version, character(1))
+)
+
+# Summary table
+session.summary <- tibble(
+  Item = c(
+    "Report generated on",
+    "R version",
+    "RStudio version",
+    "Quarto version",
+    "Number of loaded packages"
+  ),
+  Value = c(
+    format(session_date, "%Y-%m-%d %H:%M:%S"),
+    r_version,
+    ifelse(is.na(rstudio_version), "Not detected", rstudio_version),
+    ifelse(is.na(quarto_version), "Not detected", quarto_version),
+    nrow(packages)
+  )
+)
+
+# Display session summary
+kable(
+  session.summary,
+  align = c("l", "l"),
+  caption = "Execution environment summary"
+) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE
+  )
+
+# Display package versions
+kable(
+  packages,
+  align = c("l", "l"),
+  caption = "Loaded R packages and versions"
+) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE
+  )
+
+
+```
