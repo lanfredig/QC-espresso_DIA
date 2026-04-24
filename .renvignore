@@ -1,0 +1,15 @@
+# Ignore binaries and local
+app/runtime/
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# Ignore results
+output/
+data/
+
+# Ignore library
+renv/library/
+renv/staging/
+renv/python/
