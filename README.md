@@ -10,10 +10,21 @@ Quality Control Pipeline for DIA Proteomics
 ## How to Use (Step-by-Step)
 This pipeline is designed for simple and direct use in laboratory routines, requiring no technical knowledge or command-line usage. To perform Quality Control (QC), follow these steps:
 
+
+## Two ways to use QC-espresso
+
+### 🔬 For developers / reproducible analysis
+Clone this repository and restore dependencies using renv.
+
+### ▶ For end users (portable version)
+Download the portable Windows version from GitHub Releases *[here]([../../releases/latest](https://github.com/lanfredig/QC-espresso_DIA/releases/tag/v0.2.7-portable))*.
+The portable version bundles R and Quarto, which are redistributed under their respective open-source licenses.
+License notices are included within the portable package.
+
 1. **Process your experiment** using DIA-NN software.
 2. **Copy the file** `report.parquet` (resulting from DIA-NN processing) into the folder: `DIANN-out`.
-3. **Copy the SAME FASTA file** used in DIA-NN processing to the pipeline folder, using the corresponding `FASTA` folder (when available).
-4. **Double-click the shortcutbat file:** Proteomics_QC_launcher.bat` (this automatically triggers the QC pipeline).
+3. **Copy the SAME FASTA file** used in DIA-NN processing to the FASTA folder or its shortcut DATA_input.
+4. **Double-click the bat file:** Proteomics_QC_launcher.bat` or its shortcut run_DIA_QC-espresso (this automatically triggers the QC pipeline).
 5. **Wait for the automatic execution.**
 
 ### Output
@@ -54,12 +65,5 @@ The project is organized to separate **Usage** from **Implementation**. Users on
 * `DIANN-out` shortcut
 * `Results` shortcut
 
-All scripts, configurations, and runtimes are contained within the `Package` folder and do not need to be accessed manually.
+All scripts, configurations, and runtimes are contained within the `Package` folder and do not need to be accessed manually on the portable version.
 
----
-
-## Key Feature: Portability (v0.2.7)
-As of version v0.2.7, the pipeline focuses explicitly on **Portability**:
-Use Control + Shift + m to toggle the tab key moving focus. Alternatively, use esc then tab to move to the next interactive element on the page.
-Nenhum arquivo escolhido
-Attach files by dragging & dropping, selecting or pasting them.
