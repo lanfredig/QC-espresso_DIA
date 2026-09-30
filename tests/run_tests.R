@@ -203,10 +203,11 @@ record_test("Input loading workflow", function() {
   required <- c("report", "runs_removed_by_global_filter", "peptides_clean", "fasta_ref", "results_dir", "file_palette")
   missing <- required[!vapply(required, exists, logical(1), envir = env, inherits = FALSE)]
   assert_true(!length(missing), paste("Input workflow did not create:", paste(missing, collapse = ", ")))
-  assert_true(nrow(env$report) > 0L, "No rows remained after the global filter.")
-  assert_true(dplyr::n_distinct(env$report$Run) > 0L, "No runs remained after the global filter.")
-  assert_true(nrow(env$peptides_clean) > 0L, "No peptide evidence was generated.")
-  assert_true(nrow(env$fasta_ref) > 0L, "No FASTA entries were parsed.")
+  assert_equal(nrow(env$report), 28748L, "The number of retained DIA-NN rows changed relative to the functional baseline.")
+  assert_equal(dplyr::n_distinct(env$report$Run), 16L, "The number of retained runs changed relative to the functional baseline.")
+  assert_equal(nrow(env$runs_removed_by_global_filter), 3L, "The number of runs removed by the global filter changed relative to the functional baseline.")
+  assert_equal(nrow(env$peptides_clean), 1872L, "The number of protein groups with peptide evidence changed relative to the functional baseline.")
+  assert_equal(nrow(env$fasta_ref), 20416L, "The number of parsed FASTA entries changed relative to the functional baseline.")
 })
 
 passed <- sum(vapply(results, function(x) isTRUE(x$success), logical(1)))
