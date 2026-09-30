@@ -38,6 +38,8 @@
 #     execution environments.
 #   - The global analytical filter remains unchanged: Decoy == 0 and
 #     PG.Q.Value <= 0.01.
+#   - The Parquet filter is evaluated by Arrow before filtered rows are
+#     materialized in R memory.
 #   - Runs completely removed by this filter are recorded so that the QMD can
 #     display a conditional notice in the final report.
 ###############################################################################
@@ -181,9 +183,12 @@ if (!file.exists(report_path)) {
 message("Using DIA-NN report: ", report_path)
 
 
-## 3. Load and filter DIA-NN report --------------------------------------------
+## 3. Open, validate, and filter DIA-NN report ---------------------------------
 
-report_raw <- arrow::read_parquet(report_path)
+report_dataset <- arrow::open_dataset(
+  report_path,
+  format = "parquet"
+)
 
 required_report_columns <- c(
   "Run",
@@ -193,7 +198,7 @@ required_report_columns <- c(
 
 missing_report_columns <- setdiff(
   required_report_columns,
-  colnames(report_raw)
+  names(report_dataset)
 )
 
 if (length(missing_report_columns) > 0) {
@@ -203,21 +208,26 @@ if (length(missing_report_columns) > 0) {
   )
 }
 
-raw_run_names <- report_raw %>%
+raw_run_names <- report_dataset %>%
+  dplyr::select(Run) %>%
   dplyr::filter(
-    !is.na(Run),
-    nzchar(trimws(as.character(Run)))
+    !is.na(Run)
   ) %>%
-  dplyr::transmute(
+  dplyr::distinct() %>%
+  dplyr::collect() %>%
+  dplyr::mutate(
     Run = as.character(Run)
   ) %>%
-  dplyr::distinct()
+  dplyr::filter(
+    nzchar(trimws(Run))
+  )
 
-report <- report_raw %>%
+report <- report_dataset %>%
   dplyr::filter(
     Decoy == 0,
     PG.Q.Value <= 0.01
-  )
+  ) %>%
+  dplyr::collect()
 
 retained_run_names <- report %>%
   dplyr::filter(
@@ -261,7 +271,7 @@ if (nrow(runs_removed_by_global_filter) > 0) {
 }
 
 rm(
-  report_raw,
+  report_dataset,
   raw_run_names,
   retained_run_names,
   required_report_columns,
