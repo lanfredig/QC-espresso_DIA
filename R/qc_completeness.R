@@ -2,51 +2,77 @@
 # File: qc_completeness.R
 #
 # Purpose:
-#   Assess precursor-level data completeness by constructing a run × precursor
-#   matrix and summarizing both global and per-run completeness metrics.
+#   Assess precursor-level data completeness without materializing a dense
+#   run-by-precursor matrix.
 #
-# Inputs (expected to exist before sourcing):
+# Inputs:
 #   - report : Filtered DIA-NN report data frame
 #
-# Outputs (objects defined):
-#   - data_complt             : Run × precursor quantitative matrix
+# Outputs:
+#   - data_complt             : Distinct long-format quantitative observations
 #   - completeness_global_df  : Global data completeness summary table
 #   - completeness_per_run_df : Per-run data completeness summary table
 #
-# Required R packages (loaded by QMD):
+# Required R packages:
 #   - dplyr
-#   - tidyr
 #   - tibble
 #
 # Notes:
-#   - Completeness is computed using presence/absence of quantitative values
-#     only and is independent of downstream normalization or filtering steps.
-#   - This script performs no file I/O and does not generate plots directly.
+#   - Completeness is based on the presence of non-missing quantitative values.
+#   - The denominator is the Cartesian space defined by all retained runs and
+#     all retained precursor identifiers.
+#   - Duplicate Run + Precursor.Id rows are collapsed before counting.
+#   - No dense run-by-precursor matrix is created.
 ###############################################################################
 
+## 1. Validate identifiers -----------------------------------------------------
 
-## 1. Construct run × precursor matrix -----------------------------------------
-
-data_complt <- report %>% 
+completeness_input <- report %>%
   dplyr::select(
     Run,
     Precursor.Id,
     Precursor.Quantity
-  ) %>% 
-  dplyr::distinct() %>% 
-  tidyr::pivot_wider(
-    names_from  = Precursor.Id,
-    values_from = Precursor.Quantity
+  ) %>%
+  dplyr::filter(
+    !is.na(Run),
+    !is.na(Precursor.Id),
+    nzchar(trimws(as.character(Precursor.Id)))
   )
 
+run_reference <- completeness_input %>%
+  dplyr::distinct(Run)
 
-## 2. Global data completeness --------------------------------------------------
+precursor_reference <- completeness_input %>%
+  dplyr::distinct(Precursor.Id)
 
-n_runs       <- dplyr::n_distinct(data_complt$Run)
-n_precursors <- ncol(data_complt) - 1
-
+n_runs <- nrow(run_reference)
+n_precursors <- nrow(precursor_reference)
 total_possible <- n_runs * n_precursors
-observed       <- sum(!is.na(data_complt[-1]))
+
+## 2. Collapse to one observation per Run + Precursor.Id -----------------------
+
+## This long-format object replaces the previous dense matrix. A pair is
+## considered observed when at least one corresponding quantitative value is
+## non-missing.
+data_complt <- completeness_input %>%
+  dplyr::group_by(
+    Run,
+    Precursor.Id
+  ) %>%
+  dplyr::summarise(
+    Observed = any(!is.na(Precursor.Quantity)),
+    .groups = "drop"
+  )
+
+observed <- sum(data_complt$Observed)
+
+## 3. Global data completeness -------------------------------------------------
+
+completeness_global_pct <- if (total_possible > 0) {
+  100 * observed / total_possible
+} else {
+  NA_real_
+}
 
 completeness_global_df <- tibble::tibble(
   Metric = c(
@@ -61,19 +87,31 @@ completeness_global_df <- tibble::tibble(
     n_precursors,
     total_possible,
     observed,
-    (observed / total_possible) * 100
+    completeness_global_pct
   )
 )
 
+## 4. Run-level data completeness ----------------------------------------------
 
-## 3. Run-level data completeness -----------------------------------------------
-
-completeness_per_run_df <- data_complt %>% 
+completeness_per_run_df <- run_reference %>%
+  dplyr::left_join(
+    data_complt %>%
+      dplyr::group_by(Run) %>%
+      dplyr::summarise(
+        Observed = sum(Observed),
+        .groups = "drop"
+      ),
+    by = "Run"
+  ) %>%
   dplyr::mutate(
-    Observed         = rowSums(!is.na(dplyr::across(-Run))),
-    Total            = n_precursors,
-    Completeness_Pct = (Observed / Total) * 100
-  ) %>% 
+    Observed = dplyr::coalesce(Observed, 0L),
+    Total = n_precursors,
+    Completeness_Pct = dplyr::if_else(
+      Total > 0,
+      100 * Observed / Total,
+      NA_real_
+    )
+  ) %>%
   dplyr::select(
     Run,
     Observed,
@@ -81,7 +119,6 @@ completeness_per_run_df <- data_complt %>%
     Completeness_Pct
   )
 
-
-## 4. Clean exit ---------------------------------------------------------------
+## 5. Clean exit ---------------------------------------------------------------
 
 invisible(NULL)
