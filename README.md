@@ -2,9 +2,11 @@
 
 QC-espresso generates an HTML quality-control report and exportable summary tables for data-independent acquisition (DIA) proteomics experiments processed with DIA-NN.
 
-The workflow is written in R, runs through RStudio or a regular R session, and uses the DIA-NN `report.parquet` file together with the same FASTA database used for data processing.
+The scientific workflow is written in R and can be executed through RStudio or a regular R session. A portable Windows executable is available as a secondary option for routine use. Both execution modes use the DIA-NN `report.parquet` file together with the same FASTA database used for data processing and call the same scientific workflow.
 
 ## Requirements
+
+### Scientific and reproducible execution
 
 - **R 4.6.0**
 - **RStudio** recommended for interactive use
@@ -13,16 +15,30 @@ The workflow is written in R, runs through RStudio or a regular R session, and u
 
 QC-espresso automatically searches for Quarto in the system `PATH`, common standalone installation directories, recent RStudio installations, and a portable runtime located next to the repository.
 
+### Portable Windows execution
+
+The portable Windows Release includes:
+
+- R 4.6.0;
+- the validated R package library;
+- Quarto;
+- the QC-espresso scientific scripts and report;
+- the `QC-espresso.exe` graphical launcher.
+
+The portable package does not require a separate installation of R, RStudio, or Quarto.
+
 ### Input files
 
-Two input files are required:
+Both execution modes require:
 
-1. **DIA-NN report** in Parquet format, usually named `report.parquet`.
-2. **FASTA database** used for the corresponding DIA-NN analysis.
+1. a **DIA-NN report** in Parquet format, usually named `report.parquet`;
+2. the **same FASTA database** used for the corresponding DIA-NN analysis.
 
 ## Installation
 
-### 1. Clone or download the repository
+### 1. Scientific and reproducible installation
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/lanfredig/QC-espresso_DIA.git
@@ -35,17 +51,13 @@ To use the validated technical branch:
 git checkout jpr-technical-note
 ```
 
-### 2. Open the RStudio project
-
-Open:
+Open the RStudio project:
 
 ```text
 QC-espresso_DIA.Rproj
 ```
 
-### 3. Restore the R environment
-
-Run once in the R console:
+Restore the recorded R environment once from the R console:
 
 ```r
 install.packages("renv")
@@ -54,11 +66,39 @@ renv::restore()
 
 The lockfile records the validated R package environment. Quarto must also be available to generate the HTML report.
 
+### 2. Portable Windows installation
+
+1. Download `QC-espresso_v1.3.1_Windows_portable.zip` from the GitHub Releases page.
+2. Extract the complete archive to a local directory.
+3. Keep the `runtime` directory next to the `QC-espresso_DIA` directory.
+4. Do not move individual runtime folders or application files after extraction.
+
+The portable package has the following structure:
+
+```text
+QC-espresso_v1.3.1_Windows_portable/
+├── START_HERE.txt
+├── runtime/
+│   ├── R-4.6.0/
+│   ├── library/
+│   └── quarto/
+└── QC-espresso_DIA/
+    ├── launcher/
+    │   └── QC-espresso.exe
+    ├── output/
+    ├── R/
+    ├── report/
+    │   ├── QC-espresso.png
+    │   └── qc_espresso_scientific.qmd
+    ├── run_qc.R
+    └── VERSION
+```
+
 ## Usage
 
-### Recommended use in RStudio
+### 1. Scientific and reproducible execution
 
-Open the project, then run the following code in the R console or in a new R script:
+Open the RStudio project and run the following code in the R console or in an R script:
 
 ```r
 source("run_qc.R")
@@ -82,7 +122,9 @@ The analysis will:
 5. export the coverage and Figures of Merit tables;
 6. open the report in the default browser when `open_report = TRUE` and the session is interactive.
 
-### Run the included example
+#### Run the included example
+
+The repository includes a validated example dataset:
 
 ```r
 source("run_qc.R")
@@ -95,9 +137,54 @@ result <- run_qc(
 )
 ```
 
+The example data are maintained in the GitHub repository and are not included in the streamlined portable Windows Release.
+
+### 2. Portable Windows executable
+
+The executable provides a graphical interface for routine Windows use while calling the same validated scientific runner and Quarto report.
+
+1. Open `QC-espresso_DIA\launcher`.
+2. Double-click `QC-espresso.exe`.
+3. Select the DIA-NN `.parquet` report when prompted.
+4. Select the FASTA database used in the DIA-NN analysis.
+5. Follow the progress displayed in the console window.
+6. Wait for the HTML report to open automatically in the default browser.
+
+The console displays the major analysis stages:
+
+```text
+[Loading libraries]
+[Loading inputs]
+[Runs removed by global filtering]
+[Identification numbers]
+[Relative abundance]
+[Sequence coverage]
+[Peptide metrics]
+[Chromatography quality]
+[Mass accuracy]
+[Quantification quality]
+[Intensity and LFQ distribution]
+[Data completeness]
+[Figures of Merit]
+[Ion mobility]
+[Session information]
+```
+
+The execution is complete only after the launcher displays:
+
+```text
+[SUCCESS] Report generated:
+```
+
+followed by:
+
+```text
+PROCESS COMPLETED SUCCESSFULLY
+```
+
 ## Output files
 
-Each analysis is written to a separate directory, so previous results are not overwritten:
+Both execution modes call the same scientific workflow and generate the same output structure. Each analysis is written to a separate timestamped directory, so previous results are not overwritten.
 
 ```text
 output/
@@ -126,7 +213,7 @@ The report includes:
 
 ### CSV exports
 
-- `figures_of_merit_*.csv` contains the consolidated run-level QC metrics.
+- `figures_of_merit_*.csv` contains consolidated run-level QC metrics.
 - `protein_coverage_with_peptides_*.csv` contains protein sequence coverage and peptide evidence.
 
 ## Important analytical behavior
@@ -161,11 +248,11 @@ NOT IMPLEMENTED: 0
 FINAL STATUS: PASS
 ```
 
-The audit is intended for development, review, and release validation. Routine users only need to call `run_qc()`.
+The audit is intended for development, review, and release validation. Scientific and reproducible execution should use `run_qc()` directly. The portable executable is a secondary interface for routine Windows use.
 
 ## Troubleshooting
 
-### Quarto is not found
+### Quarto is not found during scientific execution
 
 Install Quarto or use a recent RStudio installation that includes it. The runner also detects a portable Quarto installation placed in a sibling `runtime/quarto` directory.
 
@@ -175,13 +262,41 @@ Check a standalone installation with:
 quarto --version
 ```
 
+### The portable executable does not start
+
+Confirm that:
+
+- the complete portable archive was extracted before execution;
+- `QC-espresso.exe` remains inside `QC-espresso_DIA\launcher`;
+- the `runtime` directory remains next to `QC-espresso_DIA`;
+- security software has not quarantined or blocked the executable.
+
+### The portable runtime is not found
+
+Confirm that the extracted package still has this structure:
+
+```text
+QC-espresso_v1.3.1_Windows_portable/
+├── runtime/
+└── QC-espresso_DIA/
+```
+
+The `runtime` directory must contain:
+
+```text
+runtime/
+├── R-4.6.0/
+├── library/
+└── quarto/
+```
+
 ### A required DIA-NN column is missing
 
-QC-espresso validates the report schema before rendering. Confirm that the selected file is the DIA-NN report in Parquet format and that it contains the required identification, quantification, chromatography, and quality columns.
+QC-espresso validates the report before rendering. Confirm that the selected file is the DIA-NN report in Parquet format and contains the required identification, quantification, chromatography, and quality columns.
 
 ### The report is not generated
 
-Read the error printed by `run_qc()`. If Quarto starts but rendering fails, the timestamped execution directory is preserved for inspection.
+Keep the R or executable console open and read the displayed error. If rendering begins but fails, the timestamped execution directory is preserved for inspection.
 
 ### A section does not appear
 
@@ -192,18 +307,24 @@ Some sections are conditional. For example, ion-mobility plots are omitted when 
 ```text
 QC-espresso_DIA/
 ├── R/                              # Scientific and input-processing modules
-├── report/                         # Quarto scientific report
+├── report/                         # Quarto scientific report and visual assets
 ├── tests/                          # Automated validation and audit suites
 ├── example-data/                   # Validated example inputs
-├── run_qc.R                        # User-facing scientific runner
+├── run_qc.R                        # Cross-platform scientific runner
 ├── renv.lock                       # Reproducible R package environment
 ├── VERSION                         # QC-espresso version
 └── QC-espresso_DIA.Rproj           # RStudio project
 ```
 
+## Distribution and source availability
+
+The R scripts, Quarto report, automated tests, example data, and reproducible environment specification are maintained in the GitHub repository.
+
+The portable Windows Release is intended for routine end-user execution and includes the compiled executable, the required scientific scripts, the Quarto report, and the portable runtime. The executable is an optional Windows interface that calls the same scientific workflow implemented by `run_qc.R`.
+
 ## Development status
 
-The `jpr-technical-note` branch contains the validated scientific refactoring and end-to-end rendering workflow. Further work should focus on validation from a clean clone, formal regression of exported files, reviewer-oriented documentation, and release preparation.
+The `jpr-technical-note` branch contains the validated scientific refactoring, portable executable integration, and end-to-end rendering workflow. Further work should focus on validation from a clean clone, formal regression of exported files, and release preparation.
 
 ## Feedback
 

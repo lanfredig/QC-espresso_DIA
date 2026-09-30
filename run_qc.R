@@ -45,11 +45,8 @@ read_qc_version <- function(project_root) {
 }
 
 is_quarto_executable <- function(path) {
-  length(path) == 1L &&
-    !is.na(path) &&
-    nzchar(path) &&
-    file.exists(path) &&
-    !dir.exists(path)
+  length(path) == 1L && !is.na(path) && nzchar(path) &&
+    file.exists(path) && !dir.exists(path)
 }
 
 expand_quarto_candidate <- function(path) {
@@ -74,9 +71,6 @@ expand_quarto_candidate <- function(path) {
 resolve_quarto_executable <- function(project_root = resolve_qc_project_root()) {
   path_quarto <- unname(Sys.which("quarto"))
 
-  ## Prefer the portable Quarto distributed beside the project runtime.
-  ## For the repository layout, project_root is QC-espresso_DIA and the
-  ## shared portable runtime is located at ../runtime.
   portable_runtime_roots <- unique(c(
     file.path(project_root, "runtime"),
     file.path(project_root, "..", "runtime"),
@@ -111,7 +105,6 @@ resolve_quarto_executable <- function(project_root = resolve_qc_project_root()) 
     Sys.getenv("LOCALAPPDATA", unset = "")
   ))
   windows_roots <- windows_roots[nzchar(windows_roots)]
-
   windows_candidates <- character(0)
 
   if (.Platform$OS.type == "windows") {
@@ -132,10 +125,7 @@ resolve_quarto_executable <- function(project_root = resolve_qc_project_root()) 
       lapply(
         windows_roots,
         function(root) {
-          c(
-            file.path(root, "RStudio"),
-            file.path(root, "Programs", "RStudio")
-          )
+          c(file.path(root, "RStudio"), file.path(root, "Programs", "RStudio"))
         }
       ),
       use.names = FALSE
@@ -182,9 +172,7 @@ resolve_quarto_executable <- function(project_root = resolve_qc_project_root()) 
   if (length(valid_candidates) > 0L) {
     for (candidate in valid_candidates) {
       normalized_candidate <- normalizePath(
-        candidate,
-        winslash = "/",
-        mustWork = TRUE
+        candidate, winslash = "/", mustWork = TRUE
       )
 
       version_status <- suppressWarnings(
@@ -205,10 +193,7 @@ resolve_quarto_executable <- function(project_root = resolve_qc_project_root()) 
     }
   }
 
-  checked_locations <- paste(
-    paste0("  - ", candidates),
-    collapse = "\n"
-  )
+  checked_locations <- paste(paste0("  - ", candidates), collapse = "\n")
 
   stop(
     paste0(
@@ -216,8 +201,7 @@ resolve_quarto_executable <- function(project_root = resolve_qc_project_root()) 
       "Install Quarto or use an RStudio installation that includes Quarto.\n",
       "QC-espresso checked the system PATH, QUARTO_PATH, RSTUDIO_QUARTO, ",
       "standard standalone installations, and bundled RStudio locations.\n\n",
-      "Checked locations:\n",
-      checked_locations
+      "Checked locations:\n", checked_locations
     ),
     call. = FALSE
   )
@@ -234,10 +218,7 @@ read_quarto_version <- function(quarto_executable) {
     error = function(error_condition) character(0)
   )
 
-  if (length(version_output) == 0L) {
-    return(NA_character_)
-  }
-
+  if (length(version_output) == 0L) return(NA_character_)
   trimws(version_output[[1L]])
 }
 
@@ -250,9 +231,7 @@ create_qc_execution_directory <- function(project_root, output_root = "output") 
 
   if (!dir.exists(output_root)) {
     directory_created <- dir.create(
-      output_root,
-      recursive = TRUE,
-      showWarnings = FALSE
+      output_root, recursive = TRUE, showWarnings = FALSE
     )
 
     if (!isTRUE(directory_created) && !dir.exists(output_root)) {
@@ -277,9 +256,7 @@ create_qc_execution_directory <- function(project_root, output_root = "output") 
   }
 
   creation_success <- dir.create(
-    execution_directory,
-    recursive = TRUE,
-    showWarnings = FALSE
+    execution_directory, recursive = TRUE, showWarnings = FALSE
   )
 
   if (!isTRUE(creation_success) && !dir.exists(execution_directory)) {
@@ -301,16 +278,11 @@ build_quarto_arguments <- function(
   c(
     "render",
     shQuote(qmd_path),
-    "--to",
-    "html",
-    "--output-dir",
-    shQuote(execution_directory),
-    "-P",
-    shQuote(paste0("report_path=", report_path)),
-    "-P",
-    shQuote(paste0("fasta_path=", fasta_path)),
-    "-P",
-    shQuote(paste0("output_dir=", execution_directory))
+    "--to", "html",
+    "--output-dir", shQuote(execution_directory),
+    "-P", shQuote(paste0("report_path=", report_path)),
+    "-P", shQuote(paste0("fasta_path=", fasta_path)),
+    "-P", shQuote(paste0("output_dir=", execution_directory))
   )
 }
 
@@ -318,7 +290,8 @@ run_qc <- function(
     report_path,
     fasta_path,
     output_root = "output",
-    open_report = interactive()
+    open_report = interactive(),
+    stream_render = FALSE
 ) {
   execution_started_at <- Sys.time()
   project_root <- resolve_qc_project_root()
@@ -329,6 +302,10 @@ run_qc <- function(
       paste0("The QC-espresso validation module was not found:\n", validation_file),
       call. = FALSE
     )
+  }
+
+  if (!is.logical(stream_render) || length(stream_render) != 1L || is.na(stream_render)) {
+    stop("`stream_render` must be TRUE or FALSE.", call. = FALSE)
   }
 
   source(validation_file, local = environment())
@@ -355,7 +332,9 @@ run_qc <- function(
     }
   )
 
-  scientific_qmd <- file.path(project_root, "report", "qc_espresso_scientific.qmd")
+  scientific_qmd <- file.path(
+    project_root, "report", "qc_espresso_scientific.qmd"
+  )
 
   if (!file.exists(scientific_qmd)) {
     unlink(execution_directory, recursive = TRUE, force = TRUE)
@@ -385,24 +364,10 @@ run_qc <- function(
   cat("============================================================\n")
   cat("\nRendering QC report...\n\n")
 
-  ## Ensure that Quarto uses the same R installation and package library as
-  ## the current QC-espresso process. QUARTO_R is the authoritative Quarto
-  ## setting for the Rscript executable used by the knitr engine.
-  current_r_bin <- normalizePath(
-    R.home("bin"),
-    winslash = "/",
-    mustWork = TRUE
-  )
-
+  current_r_bin <- normalizePath(R.home("bin"), winslash = "/", mustWork = TRUE)
   current_path <- Sys.getenv("PATH", unset = "")
   current_r_libs_user <- Sys.getenv("R_LIBS_USER", unset = "")
-
-  render_path <- paste(
-    current_r_bin,
-    current_path,
-    sep = .Platform$path.sep
-  )
-
+  render_path <- paste(current_r_bin, current_path, sep = .Platform$path.sep)
   current_rscript <- file.path(
     current_r_bin,
     if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript"
@@ -420,12 +385,8 @@ run_qc <- function(
 
   previous_environment <- Sys.getenv(
     c(
-      "PATH",
-      "R_HOME",
-      "R_LIBS_USER",
-      "QUARTO_R",
-      "QUARTO_KNITR_RSCRIPT_ARGS",
-      "RENV_CONFIG_AUTOLOADER_ENABLED"
+      "PATH", "R_HOME", "R_LIBS_USER", "QUARTO_R",
+      "QUARTO_KNITR_RSCRIPT_ARGS", "RENV_CONFIG_AUTOLOADER_ENABLED"
     ),
     unset = NA_character_
   )
@@ -439,19 +400,13 @@ run_qc <- function(
       } else {
         do.call(
           Sys.setenv,
-          stats::setNames(
-            list(previous_value),
-            variable_name
-          )
+          stats::setNames(list(previous_value), variable_name)
         )
       }
     }
   }
 
-  on.exit(
-    restore_render_environment(),
-    add = TRUE
-  )
+  on.exit(restore_render_environment(), add = TRUE)
 
   Sys.setenv(
     PATH = render_path,
@@ -462,9 +417,7 @@ run_qc <- function(
   )
 
   if (nzchar(current_r_libs_user)) {
-    Sys.setenv(
-      R_LIBS_USER = current_r_libs_user
-    )
+    Sys.setenv(R_LIBS_USER = current_r_libs_user)
   }
 
   cat("Render R executable: ", current_rscript, "\n", sep = "")
@@ -479,21 +432,37 @@ run_qc <- function(
     sep = ""
   )
 
-  render_output <- system2(
-    command = quarto_executable,
-    args = quarto_arguments,
-    stdout = TRUE,
-    stderr = TRUE
-  )
+  if (isTRUE(stream_render)) {
+    render_status <- tryCatch(
+      system2(
+        command = quarto_executable,
+        args = quarto_arguments,
+        stdout = "",
+        stderr = ""
+      ),
+      error = function(error_condition) {
+        stop(conditionMessage(error_condition), call. = FALSE)
+      }
+    )
+
+    render_output <- character(0)
+  } else {
+    render_output <- system2(
+      command = quarto_executable,
+      args = quarto_arguments,
+      stdout = TRUE,
+      stderr = TRUE
+    )
+
+    render_status <- attr(render_output, "status")
+    if (is.null(render_status)) render_status <- 0L
+
+    if (length(render_output) > 0L) {
+      cat(paste(render_output, collapse = "\n"), "\n")
+    }
+  }
 
   restore_render_environment()
-
-  render_status <- attr(render_output, "status")
-  if (is.null(render_status)) render_status <- 0L
-
-  if (length(render_output) > 0L) {
-    cat(paste(render_output, collapse = "\n"), "\n")
-  }
 
   if (!identical(as.integer(render_status), 0L)) {
     stop(
@@ -515,8 +484,7 @@ run_qc <- function(
     stop(
       paste0(
         "Quarto completed without a reported error, but the expected HTML ",
-        "report was not found:\n",
-        rendered_html
+        "report was not found:\n", rendered_html
       ),
       call. = FALSE
     )
