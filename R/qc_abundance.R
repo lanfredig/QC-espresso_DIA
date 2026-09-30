@@ -2,8 +2,10 @@
 # File: qc_abundance.R
 #
 # Purpose:
-#   Quantify and visualize protein-level signal composition across runs and
-#   generate contaminant-specific profiles when recognized annotations exist.
+#   Quantify and visualize protein-group signal composition across runs,
+#   annotate single- and multi-protein groups using the centralized FASTA
+#   reference, and generate contaminant-specific profiles when recognized
+#   contaminant annotations exist.
 #
 # Inputs:
 #   - report
@@ -12,6 +14,10 @@
 #   - legend_fill
 #
 # Outputs:
+#   - protein_group_annotation
+#   - report_labeled
+#   - protein_group_signal
+#   - abundance
 #   - p_abundance
 #   - p_contaminants
 #   - CONTAMINANT_PREFIXES_AVAILABLE
@@ -19,17 +25,20 @@
 #   - contaminant_fraction
 #
 # Notes:
-#   - Contaminants are recognized by Protein.Group prefixes CON_ or cRAP-.
-#   - If recognized contaminant entries are unavailable, the contaminant plot
-#     is replaced by a Quarto warning callout.
+#   - Quantitative values remain assigned to the original DIA-NN
+#     Protein.Group.
+#   - Multi-protein groups are expanded only for FASTA annotation and are
+#     aggregated back to one annotation row before joining to quantitative
+#     data.
+#   - Quantitative signal is never duplicated across individual accessions.
+#   - Contaminants are recognized when CON_ or cRAP- occurs at the beginning
+#     of any accession within a protein group.
 ###############################################################################
 
 ## 1. Freeze run order ---------------------------------------------------------
-
 run_levels <- unique(report$Run)
 
-## 2. Gene annotation from centralized FASTA object ----------------------------
-
+## 2. Build accession-level FASTA annotation map -------------------------------
 gene_map_available <- (
   exists("fasta_ref") &&
     is.data.frame(fasta_ref) &&
@@ -40,7 +49,8 @@ gene_map_available <- (
 if (isTRUE(gene_map_available)) {
   gene_map <- fasta_ref %>%
     dplyr::transmute(
-      Protein.Group = trimws(Protein.Group),
+      Accession = trimws(Protein.Group),
+      FASTA_Matched = TRUE,
       Gene_from_fasta = dplyr::if_else(
         grepl("GN=", Header),
         sub(".*GN=([^ ]+).*", "\\1", Header),
@@ -55,52 +65,235 @@ if (isTRUE(gene_map_available)) {
         NA_character_
       )
     ) %>%
-    dplyr::filter(!is.na(Protein.Group), nzchar(Protein.Group)) %>%
-    dplyr::distinct(Protein.Group, .keep_all = TRUE)
+    dplyr::filter(!is.na(Accession), nzchar(Accession)) %>%
+    dplyr::distinct(Accession, .keep_all = TRUE)
 
   message("Gene annotation derived from centralized fasta_ref object")
 } else {
   gene_map <- data.frame(
-    Protein.Group = character(0),
+    Accession = character(0),
+    FASTA_Matched = logical(0),
     Gene_from_fasta = character(0),
     stringsAsFactors = FALSE
   )
 
   message(
-    "[ABUNDANCE] fasta_ref not available or incomplete; using Protein.Group as fallback label"
+    paste0(
+      "[ABUNDANCE] fasta_ref not available or incomplete; ",
+      "using Protein.Group as fallback label"
+    )
   )
 }
 
-report_labeled <- report %>%
-  dplyr::left_join(gene_map, by = "Protein.Group") %>%
+## 3. Annotate single- and multi-protein groups --------------------------------
+protein_group_annotation <- report %>%
+  dplyr::filter(
+    !is.na(Protein.Group),
+    nzchar(trimws(Protein.Group))
+  ) %>%
+  dplyr::distinct(Protein.Group) %>%
+  dplyr::mutate(Accession = Protein.Group) %>%
+  tidyr::separate_rows(Accession, sep = ";") %>%
+  dplyr::mutate(Accession = trimws(Accession)) %>%
+  dplyr::filter(!is.na(Accession), nzchar(Accession)) %>%
+  dplyr::left_join(gene_map, by = "Accession") %>%
   dplyr::mutate(
+    FASTA_Matched = tidyr::replace_na(FASTA_Matched, FALSE)
+  ) %>%
+  dplyr::group_by(Protein.Group) %>%
+  dplyr::summarise(
+    Accession_Count = dplyr::n_distinct(Accession),
+    Accessions = paste(sort(unique(Accession)), collapse = ";"),
+    Matched_Accession_Count = dplyr::n_distinct(
+      Accession[FASTA_Matched]
+    ),
+    Matched_Accessions = paste(
+      sort(unique(Accession[FASTA_Matched])),
+      collapse = ";"
+    ),
+    Unmatched_Accessions = paste(
+      sort(unique(Accession[!FASTA_Matched])),
+      collapse = ";"
+    ),
+    Gene_Annotations = paste(
+      sort(unique(Gene_from_fasta[
+        !is.na(Gene_from_fasta) & nzchar(Gene_from_fasta)
+      ])),
+      collapse = " | "
+    ),
+    Distinct_Gene_Count = dplyr::n_distinct(
+      Gene_from_fasta[
+        !is.na(Gene_from_fasta) & nzchar(Gene_from_fasta)
+      ]
+    ),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    Annotation_Status = dplyr::case_when(
+      Matched_Accession_Count == 0L ~ "NO_FASTA_MATCH",
+      Matched_Accession_Count < Accession_Count ~ "PARTIAL_FASTA_MATCH",
+      Accession_Count == 1L ~ "SINGLE_PROTEIN",
+      Distinct_Gene_Count <= 1L ~ "CONSISTENT_ANNOTATION",
+      TRUE ~ "MULTIPLE_ANNOTATIONS"
+    ),
+    Annotation_Label = dplyr::case_when(
+      Annotation_Status == "NO_FASTA_MATCH" ~ Protein.Group,
+      Annotation_Status == "PARTIAL_FASTA_MATCH" & nzchar(Gene_Annotations) ~
+        paste0(Gene_Annotations, " [partial]"),
+      Annotation_Status == "PARTIAL_FASTA_MATCH" ~
+        paste0(Matched_Accessions, " [partial]"),
+      nzchar(Gene_Annotations) ~ Gene_Annotations,
+      nzchar(Matched_Accessions) ~ Matched_Accessions,
+      TRUE ~ Protein.Group
+    ),
     Gene_Label = dplyr::if_else(
-      !is.na(Gene_from_fasta),
-      Gene_from_fasta,
+      !is.na(Annotation_Label) & nzchar(Annotation_Label),
+      Annotation_Label,
       Protein.Group
     )
+  )
+
+## 4. Join annotation without duplicating quantitative rows --------------------
+report_labeled <- report %>%
+  dplyr::left_join(
+    protein_group_annotation,
+    by = "Protein.Group",
+    relationship = "many-to-one"
   ) %>%
-  dplyr::select(-Gene_from_fasta)
+  dplyr::mutate(
+    Accession_Count = tidyr::replace_na(Accession_Count, 1L),
+    Matched_Accession_Count = tidyr::replace_na(
+      Matched_Accession_Count,
+      0L
+    ),
+    Annotation_Status = dplyr::if_else(
+      is.na(Annotation_Status),
+      "NO_FASTA_MATCH",
+      Annotation_Status
+    ),
+    Gene_Label = dplyr::if_else(
+      !is.na(Gene_Label) & nzchar(Gene_Label),
+      Gene_Label,
+      Protein.Group
+    )
+  )
 
-## 3. Protein-group signal aggregation -----------------------------------------
+## 5. Verify annotation join invariants ----------------------------------------
+if (nrow(report_labeled) != nrow(report)) {
+  stop(
+    paste0(
+      "[ABUNDANCE] Protein-group annotation changed the number of DIA-NN ",
+      "report rows. Quantitative values may have been duplicated."
+    )
+  )
+}
 
+if (
+  dplyr::n_distinct(report_labeled$Protein.Group) !=
+    dplyr::n_distinct(report$Protein.Group)
+) {
+  stop(
+    paste0(
+      "[ABUNDANCE] One or more protein groups were lost during FASTA ",
+      "annotation."
+    )
+  )
+}
+
+## 6. Report multi-protein annotation summary ----------------------------------
+multi_protein_annotation_summary <- protein_group_annotation %>%
+  dplyr::filter(Accession_Count > 1L) %>%
+  dplyr::count(Annotation_Status, name = "Protein_Group_Count") %>%
+  dplyr::arrange(Annotation_Status)
+
+if (nrow(multi_protein_annotation_summary) > 0L) {
+  message(
+    "Multi-protein groups annotated: ",
+    sum(multi_protein_annotation_summary$Protein_Group_Count)
+  )
+
+  for (summary_index in seq_len(nrow(multi_protein_annotation_summary))) {
+    message(
+      "  ",
+      multi_protein_annotation_summary$Annotation_Status[summary_index],
+      ": ",
+      multi_protein_annotation_summary$Protein_Group_Count[summary_index]
+    )
+  }
+}
+
+## 7. Protein-group signal aggregation -----------------------------------------
 protein_group_signal <- report_labeled %>%
   dplyr::filter(!is.na(Precursor.Quantity), Precursor.Quantity > 0) %>%
-  dplyr::group_by(Run, Protein.Group, Gene_Label) %>%
-  dplyr::summarise(Signal = sum(Precursor.Quantity), .groups = "drop") %>%
+  dplyr::group_by(
+    Run,
+    Protein.Group,
+    Gene_Label,
+    Annotation_Status
+  ) %>%
+  dplyr::summarise(
+    Signal = sum(Precursor.Quantity),
+    .groups = "drop"
+  ) %>%
   dplyr::mutate(Run = factor(Run, levels = run_levels))
 
-## 4. Global top contributors --------------------------------------------------
+## 8. Verify signal preservation -----------------------------------------------
+signal_before_annotation <- report %>%
+  dplyr::filter(!is.na(Precursor.Quantity), Precursor.Quantity > 0) %>%
+  dplyr::group_by(Run, Protein.Group) %>%
+  dplyr::summarise(
+    Signal_Before = sum(Precursor.Quantity),
+    .groups = "drop"
+  )
 
+signal_after_annotation <- protein_group_signal %>%
+  dplyr::group_by(Run, Protein.Group) %>%
+  dplyr::summarise(
+    Signal_After = sum(Signal),
+    .groups = "drop"
+  )
+
+signal_validation <- signal_before_annotation %>%
+  dplyr::full_join(
+    signal_after_annotation,
+    by = c("Run", "Protein.Group")
+  ) %>%
+  dplyr::mutate(
+    Signal_Before = tidyr::replace_na(Signal_Before, 0),
+    Signal_After = tidyr::replace_na(Signal_After, 0),
+    Signal_Difference = Signal_After - Signal_Before
+  )
+
+if (
+  nrow(signal_validation) == 0L ||
+    any(abs(signal_validation$Signal_Difference) > sqrt(.Machine$double.eps))
+) {
+  stop(
+    paste0(
+      "[ABUNDANCE] Quantitative signal changed during protein-group ",
+      "annotation."
+    )
+  )
+}
+
+rm(
+  signal_before_annotation,
+  signal_after_annotation,
+  signal_validation
+)
+
+## 9. Global top contributors --------------------------------------------------
 top_gene_labels <- protein_group_signal %>%
   dplyr::group_by(Gene_Label) %>%
-  dplyr::summarise(TotalSignal = sum(Signal), .groups = "drop") %>%
-  dplyr::arrange(dplyr::desc(TotalSignal)) %>%
+  dplyr::summarise(
+    TotalSignal = sum(Signal),
+    .groups = "drop"
+  ) %>%
+  dplyr::arrange(dplyr::desc(TotalSignal), Gene_Label) %>%
   dplyr::slice_head(n = 10) %>%
   dplyr::pull(Gene_Label)
 
-## 5. Relative abundance composition ------------------------------------------
-
+## 10. Relative abundance composition ------------------------------------------
 abundance <- protein_group_signal %>%
   dplyr::mutate(
     Plot_Label = dplyr::if_else(
@@ -131,7 +324,11 @@ abundance <- protein_group_signal %>%
   dplyr::mutate(
     Run = factor(Run, levels = run_levels),
     Plot_Label = factor(Plot_Label),
-    Plot_Label = forcats::fct_relevel(Plot_Label, "Others", after = Inf)
+    Plot_Label = forcats::fct_relevel(
+      Plot_Label,
+      "Others",
+      after = Inf
+    )
   )
 
 gene_palette <- c(
@@ -142,8 +339,7 @@ gene_palette <- c(
   Others = "grey85"
 )
 
-## 6. Plot: relative signal composition ----------------------------------------
-
+## 11. Plot: relative signal composition ---------------------------------------
 p_abundance <- ggplot2::ggplot(
   abundance,
   ggplot2::aes(
@@ -160,7 +356,10 @@ p_abundance <- ggplot2::ggplot(
   ggplot2::scale_fill_manual(values = gene_palette) +
   ggplot2::labs(
     title = "Protein and Gene Signal Composition per Run",
-    subtitle = "Largest contributions stacked at the bottom; aggregated remainder on top",
+    subtitle = paste0(
+      "Largest contributions stacked at the bottom; ",
+      "aggregated remainder on top"
+    ),
     x = "Run",
     y = "Fraction of total signal (%)",
     fill = "Protein / Gene"
@@ -173,21 +372,29 @@ p_abundance <- ggplot2::ggplot(
 
 print(p_abundance)
 
-## 7. Detect recognized contaminant annotations --------------------------------
-
-recognized_contaminant_pattern <- "^(cRAP-|CON_)"
+## 12. Detect recognized contaminant annotations -------------------------------
+recognized_contaminant_pattern <- "(^|;\\s*)(cRAP-|CON_)"
 
 CONTAMINANT_PREFIXES_AVAILABLE <- report %>%
   dplyr::filter(
     !is.na(Protein.Group),
-    grepl(recognized_contaminant_pattern, Protein.Group)
+    grepl(
+      recognized_contaminant_pattern,
+      Protein.Group,
+      perl = TRUE
+    )
   ) %>%
-  nrow() > 0
+  nrow() >
+  0
 
 contaminant_pg_signal <- protein_group_signal %>%
   dplyr::filter(
     !is.na(Protein.Group),
-    grepl(recognized_contaminant_pattern, Protein.Group)
+    grepl(
+      recognized_contaminant_pattern,
+      Protein.Group,
+      perl = TRUE
+    )
   )
 
 CONTAMINANT_SIGNAL_AVAILABLE <- (
@@ -204,10 +411,8 @@ contaminant_abundance <- data.frame()
 contaminant_fraction <- data.frame()
 top_contaminants <- character(0)
 
-## 8. Contaminant composition or conditional warning ---------------------------
-
+## 13. Contaminant composition or conditional warning --------------------------
 if (!isTRUE(CONTAMINANT_PREFIXES_AVAILABLE)) {
-
   cat(
     paste0(
       '\n<div class="alert alert-warning" role="alert" ',
@@ -226,9 +431,7 @@ if (!isTRUE(CONTAMINANT_PREFIXES_AVAILABLE)) {
       '</div>\n\n'
     )
   )
-
 } else if (!isTRUE(CONTAMINANT_SIGNAL_AVAILABLE)) {
-
   cat(
     paste0(
       '\n<div class="alert alert-warning" role="alert" ',
@@ -248,21 +451,18 @@ if (!isTRUE(CONTAMINANT_PREFIXES_AVAILABLE)) {
       '</div>\n\n'
     )
   )
-
 } else {
-  ## 8.1 Global top contaminant contributors ----------------------------------
-
+  ## 13.1 Global top contaminant contributors ---------------------------------
   top_contaminants <- contaminant_pg_signal %>%
     dplyr::group_by(Gene_Label) %>%
     dplyr::summarise(TotalSignal = sum(Signal), .groups = "drop") %>%
-    dplyr::arrange(dplyr::desc(TotalSignal)) %>%
+    dplyr::arrange(dplyr::desc(TotalSignal), Gene_Label) %>%
     dplyr::slice_head(n = 10) %>%
     dplyr::pull(Gene_Label)
 
   contaminant_levels <- c(top_contaminants, "Others")
 
-  ## 8.2 Relative contaminant composition -------------------------------------
-
+  ## 13.2 Relative contaminant composition ------------------------------------
   contaminant_abundance <- contaminant_pg_signal %>%
     dplyr::mutate(
       Plot_Label = dplyr::if_else(
@@ -296,12 +496,15 @@ if (!isTRUE(CONTAMINANT_PREFIXES_AVAILABLE)) {
     dplyr::select(-TotalContaminantSignal) %>%
     dplyr::mutate(
       Run = factor(Run, levels = run_levels),
-      Plot_Label = factor(Plot_Label),
-      Plot_Label = forcats::fct_relevel(Plot_Label, "Others", after = Inf)
+      Plot_Label = factor(Plot_Label, levels = contaminant_levels),
+      Plot_Label = forcats::fct_relevel(
+        Plot_Label,
+        "Others",
+        after = Inf
+      )
     )
 
-  ## 8.3 Contaminant fraction per run -----------------------------------------
-
+  ## 13.3 Contaminant fraction per run ----------------------------------------
   total_signal <- protein_group_signal %>%
     dplyr::group_by(Run) %>%
     dplyr::summarise(TotalSignal = sum(Signal), .groups = "drop")
@@ -331,8 +534,7 @@ if (!isTRUE(CONTAMINANT_PREFIXES_AVAILABLE)) {
       Run = factor(Run, levels = run_levels)
     )
 
-  ## 8.4 Contaminant color palette --------------------------------------------
-
+  ## 13.4 Contaminant color palette -------------------------------------------
   gene_palette_cont <- c(
     setNames(
       grDevices::colorRampPalette(cb_palette)(length(top_contaminants)),
@@ -341,8 +543,7 @@ if (!isTRUE(CONTAMINANT_PREFIXES_AVAILABLE)) {
     Others = "grey80"
   )
 
-  ## 8.5 Plot: contaminant composition ----------------------------------------
-
+  ## 13.5 Plot: contaminant composition ---------------------------------------
   p_contaminants <- ggplot2::ggplot(
     contaminant_abundance,
     ggplot2::aes(
@@ -374,7 +575,10 @@ if (!isTRUE(CONTAMINANT_PREFIXES_AVAILABLE)) {
     ) +
     ggplot2::labs(
       title = "Contaminant Signal Composition per Run",
-      subtitle = "Largest contributors stacked at the bottom; aggregated remainder on top",
+      subtitle = paste0(
+        "Largest contributors stacked at the bottom; ",
+        "aggregated remainder on top"
+      ),
       x = "Relative abundance within contaminants (%)",
       y = "Run",
       fill = "Contaminant"
@@ -389,6 +593,5 @@ if (!isTRUE(CONTAMINANT_PREFIXES_AVAILABLE)) {
   print(p_contaminants)
 }
 
-## 9. Clean exit ---------------------------------------------------------------
-
+## 14. Clean exit --------------------------------------------------------------
 invisible(NULL)
