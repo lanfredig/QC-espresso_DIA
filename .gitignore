@@ -19,3 +19,11 @@ Thumbs.db
 Desktop.ini
 *.tmp
 *.log
+!example-data/*.parquet
+!example-data/*.fasta
+!example-data/*.fa
+!example-data/*.faa
+!example-data/**/*.parquet
+!example-data/**/*.fasta
+!example-data/**/*.fa
+!example-data/**/*.faa
