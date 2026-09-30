@@ -1,0 +1,502 @@
+---
+title: "QC-espresso - DIA"
+subtitle: "Quality control report for DIA proteomics data"
+author:
+  - name: "Guilherme Lanfredi"
+date: "`r Sys.Date()`"
+version: "`r trimws(readLines(file.path('..', 'VERSION'), n = 1L, warn = FALSE))`"
+abstract: >
+  This report provides a structured quality control assessment of
+  data-independent acquisition (DIA) proteomics experiments processed with
+  DIA-NN. The analysis supports instrument performance monitoring, dataset
+  validation, and QC tracking.
+params:
+  report_path: null
+  fasta_path: null
+  output_dir: null
+format:
+  html:
+    page-layout: full
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    fig-responsive: false
+    fig-width: 8
+    fig-height: 5
+    fig-dpi: 144
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+  error: true
+  freeze: false
+editor: visual
+---
+
+```{=html}
+<style>
+.quarto-title-block {
+  position: relative;
+  padding-left: 90px;
+}
+
+.quarto-title-block::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 16px;
+  width: 70px;
+  height: 70px;
+  background-image: url("QC-espresso.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+</style>
+```
+
+```{r}
+#| label: setup
+#| echo: false
+#| message: false
+#| warning: false
+
+QMD_DIR <- normalizePath(
+  dirname(knitr::current_input()),
+  winslash = "/",
+  mustWork = TRUE
+)
+
+PROJECT_ROOT <- normalizePath(
+  file.path(QMD_DIR, ".."),
+  winslash = "/",
+  mustWork = TRUE
+)
+
+qc_version <- trimws(
+  readLines(
+    file.path(PROJECT_ROOT, "VERSION"),
+    n = 1L,
+    warn = FALSE
+  )
+)
+
+library(tidyverse)
+library(arrow)
+library(ggplot2)
+library(ggrepel)
+library(scales)
+library(RColorBrewer)
+library(microseq)
+library(knitr)
+library(gt)
+library(gtExtras)
+
+source(file.path(PROJECT_ROOT, "R", "globals.R"))
+source(file.path(PROJECT_ROOT, "R", "io_load.R"))
+
+n_runs <- dplyr::n_distinct(report$Run)
+IS_LARGE_BATCH <- n_runs > 12L
+```
+
+```{r}
+#| label: runs-removed-by-global-filtering
+#| echo: false
+#| message: false
+#| warning: false
+#| results: asis
+
+if (
+  exists("runs_removed_by_global_filter") &&
+    is.data.frame(runs_removed_by_global_filter) &&
+    nrow(runs_removed_by_global_filter) > 0L
+) {
+  removed_run_names <- paste(
+    as.character(runs_removed_by_global_filter$Run),
+    collapse = ", "
+  )
+
+  removed_run_count <- nrow(runs_removed_by_global_filter)
+
+  cat("::: {.callout-warning}\n")
+  cat("## Runs excluded by global confidence filtering\n\n")
+  cat(
+    "**",
+    removed_run_count,
+    " acquisition run(s) were completely removed after decoy exclusion and ",
+    "application of `PG.Q.Value <= 0.01`.**\n\n",
+    sep = ""
+  )
+  cat("**Affected run(s):** ", removed_run_names, "\n\n", sep = "")
+  cat(
+    "These runs are absent from downstream QC outputs because no entries ",
+    "remained after the initial confidence filter.\n"
+  )
+  cat(":::\n")
+}
+```
+
+# 1. Identification performance
+
+::: {.callout-note collapse="true"}
+## Identification depth
+
+This section reports identification depth per run at the precursor, peptide, and protein-group levels.
+:::
+
+```{r}
+#| label: identification-numbers
+#| fig-height: 9
+#| fig-width: 8
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_identification.R")))
+```
+
+```{r}
+#| label: identification-table
+
+total_ids_table_note <- report |>
+  dplyr::summarise(
+    Peptides = dplyr::n_distinct(Modified.Sequence),
+    Precursors = dplyr::n_distinct(Precursor.Id),
+    Protein.Groups = dplyr::n_distinct(Protein.Group)
+  ) |>
+  dplyr::mutate(
+    note = paste0(
+      "TOTAL across all runs - Peptides: ", scales::comma(Peptides),
+      "; Precursors: ", scales::comma(Precursors),
+      "; Protein Groups: ", scales::comma(Protein.Groups)
+    )
+  ) |>
+  dplyr::pull(note)
+
+id_depth_summary |>
+  gt::gt() |>
+  gt::tab_header(
+    title = "Identification Depth per Run",
+    subtitle = "Precursors, peptides, and protein groups"
+  ) |>
+  gt::fmt_integer(columns = c(Precursors, Peptides, Protein.Groups)) |>
+  gt::tab_source_note(source_note = gt::md(total_ids_table_note)) |>
+  gt::tab_options(
+    table.width = gt::pct(100),
+    container.height = gt::px(400),
+    container.overflow.y = "scroll"
+  )
+```
+
+# 2. Quantitative signal composition
+
+::: {.callout-note collapse="true"}
+## Relative abundance and contaminant contribution
+
+This section summarizes the relative distribution of protein-group signal across runs and the contribution from recognized contaminant groups.
+:::
+
+```{r}
+#| label: relative-abundance
+#| results: asis
+#| fig-height: 6
+#| fig-width: 10
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_abundance.R")))
+```
+
+# 3. Sequence coverage
+
+::: {.callout-note collapse="true"}
+## Protein sequence coverage
+
+Coverage is calculated independently for each FASTA accession. For multiprotein groups, shared peptide evidence may contribute to more than one compatible sequence, but no quantitative signal is duplicated.
+:::
+
+```{r}
+#| label: sequence-coverage
+#| fig-height: 5
+#| fig-width: 7
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_coverage.R")))
+```
+
+```{r}
+#| label: sequence-coverage-table
+
+if (
+  exists("coverage_results_top100") &&
+    is.data.frame(coverage_results_top100) &&
+    nrow(coverage_results_top100) > 0L
+) {
+  coverage_results_top100 |>
+    gt::gt() |>
+    gt::tab_header(
+      title = "Protein Sequence Coverage Summary (Top 100)",
+      subtitle = "Full peptide evidence is exported as CSV"
+    ) |>
+    gt::cols_label(
+      Protein.Group = "Accession",
+      Protein.Name = "Protein Name",
+      Total_Len = "Length (aa)",
+      Aminoacids_Covered = "Covered AA",
+      Coverage_Pct = "Coverage (%)"
+    ) |>
+    gtExtras::gt_plt_bar_pct(
+      column = Coverage_Pct,
+      scaled = TRUE,
+      fill = "#56B4E9",
+      background = "white",
+      labels = TRUE
+    ) |>
+    gt::tab_options(
+      table.width = gt::pct(100),
+      container.height = gt::px(500),
+      container.overflow.y = "scroll"
+    )
+} else {
+  cat("Protein coverage summary not available.\n")
+}
+```
+
+# 4. Peptide-level quality
+
+::: {.callout-note collapse="true"}
+## Peptide-level metrics
+
+This section reports precursor charge states, peptide lengths, and the fraction of unique peptide sequences with at least one missed tryptic cleavage.
+:::
+
+```{r}
+#| label: peptide-metrics
+#| fig-height: 4
+#| fig-width: 8
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_peptides.R")))
+```
+
+# 5. Chromatographic performance
+
+::: {.callout-note collapse="true"}
+## Chromatography quality
+
+This section evaluates identification density over retention time, FWHM, peak base width, and trypsin autolysis precursor stability.
+:::
+
+```{r}
+#| label: chromatography-quality
+#| fig-height: 3.5
+#| fig-width: 7.5
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_chromatography.R")))
+```
+
+```{r}
+#| label: internal-standard-quality
+#| fig-height: 6
+#| fig-width: 7.5
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_chromatography_internalstd.R")))
+```
+
+# 6. Mass accuracy
+
+::: {.callout-note collapse="true"}
+## Mass accuracy
+
+This section summarizes precursor mass error in parts per million across runs and across the precursor m/z range.
+:::
+
+```{r}
+#| label: mass-accuracy
+#| fig-height: 3.5
+#| fig-width: 8
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_mass_error.R")))
+```
+
+# 7. Quantification quality
+
+::: {.callout-note collapse="true"}
+## DIA-NN quantification quality
+
+This section evaluates precursor reliability and protein-group MaxLFQ quality in relation to precursor support.
+:::
+
+```{r}
+#| label: quantification-quality
+#| fig-height: 4
+#| fig-width: 8
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_diann_quality_metrics.R")))
+```
+
+# 8. Intensity and LFQ distribution
+
+::: {.callout-note collapse="true"}
+## Intensity and LFQ distribution
+
+Raw precursor quantities and one positive PG.MaxLFQ value per run and protein group are summarized across runs.
+:::
+
+```{r}
+#| label: intensity-and-lfq
+#| fig-height: 5
+#| fig-width: 9
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_intensity.R")))
+```
+
+# 9. Data completeness
+
+::: {.callout-note collapse="true"}
+## Data completeness
+
+Completeness is calculated from distinct run and precursor combinations without materializing a dense matrix.
+:::
+
+```{r}
+#| label: data-completeness
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_completeness.R")))
+```
+
+```{r}
+#| label: global-completeness-table
+
+completeness_global_df |>
+  gt::gt() |>
+  gt::tab_header(
+    title = "Precursor-level data completeness (global)",
+    subtitle = "Computed across all runs and precursors"
+  ) |>
+  gt::fmt_integer(rows = Metric != "Data completeness (%)") |>
+  gt::fmt_number(rows = Metric == "Data completeness (%)", decimals = 1)
+```
+
+```{r}
+#| label: run-completeness-table
+
+completeness_per_run_df |>
+  gt::gt() |>
+  gt::tab_header(
+    title = "Run-level precursor completeness",
+    subtitle = "Percentage of precursors detected per run"
+  ) |>
+  gt::fmt_integer(columns = c(Observed, Total)) |>
+  gt::fmt_number(columns = Completeness_Pct, decimals = 1) |>
+  gt::tab_options(
+    table.width = gt::pct(100),
+    container.height = gt::px(400),
+    container.overflow.y = "scroll"
+  )
+```
+
+# 10. Figures of Merit
+
+::: {.callout-note collapse="true"}
+## Figures of Merit
+
+This section consolidates identification, chromatographic, retention-time, mass-accuracy, peptide, charge-state, and contaminant metrics per run.
+:::
+
+```{r}
+#| label: figures-of-merit
+
+invisible(source(file.path(PROJECT_ROOT, "R", "qc_figures_of_merit.R")))
+```
+
+```{r}
+#| label: figures-of-merit-table
+
+if (
+  exists("figures_of_merit_df") &&
+    is.data.frame(figures_of_merit_df) &&
+    nrow(figures_of_merit_df) > 0L
+) {
+  figures_of_merit_df |>
+    gt::gt() |>
+    gt::tab_header(
+      title = "Run-level Figures of Merit",
+      subtitle = "Complete table exported as CSV"
+    ) |>
+    gt::fmt_integer(columns = c(Precursors, Peptides, Protein_Groups)) |>
+    gt::fmt_number(
+      columns = c(
+        Median_FWHM_s,
+        Median_PeakBase_s,
+        Median_RT_Deviation_min,
+        Median_Mass_Error_ppm,
+        Median_Peptide_Length,
+        Missed_Cleavage_Pct,
+        Charge2_Pct,
+        Charge3_Pct,
+        Contaminant_Pct
+      ),
+      decimals = 2
+    ) |>
+    gt::tab_options(
+      table.width = gt::pct(100),
+      container.height = gt::px(400),
+      container.overflow.y = "scroll"
+    )
+} else {
+  cat("Figures of merit not available.\n")
+}
+```
+
+```{r}
+#| label: ion-mobility-availability
+
+im_candidates <- c(
+  "IM",
+  "Ion.Mobility",
+  "Precursor.Ion.Mobility",
+  "1/K0"
+)
+
+im_col <- im_candidates[im_candidates %in% colnames(report)][1]
+HAS_VALID_ION_MOBILITY <- FALSE
+
+if (!is.na(im_col)) {
+  im_values <- report[[im_col]]
+  im_values <- im_values[!is.na(im_values) & im_values != 0]
+
+  if (length(im_values) > 0L) {
+    HAS_VALID_ION_MOBILITY <- (
+      dplyr::n_distinct(im_values) >= 10L &&
+        stats::sd(im_values, na.rm = TRUE) > 1e-4
+    )
+  }
+}
+```
+
+```{r}
+#| label: ion-mobility-heading
+#| results: asis
+
+if (isTRUE(HAS_VALID_ION_MOBILITY)) {
+  cat("# 11. Ion mobility\n\n")
+  cat("::: {.callout-note collapse=\"true\"}\n")
+  cat("## Ion mobility\n\n")
+  cat("This section evaluates precursor density in m/z and ion-mobility space and, when predicted mobility is available, compares observed and predicted trends.\n")
+  cat(":::\n")
+}
+```
+
+```{r}
+#| label: ion-mobility
+#| fig-height: 6
+#| fig-width: 8
+
+if (isTRUE(HAS_VALID_ION_MOBILITY)) {
+  invisible(source(file.path(PROJECT_ROOT, "R", "qc_ion_mobility.R")))
+}
+```
+
+# Reproducibility and session information
+
+```{r}
+#| label: session-information
+#| results: asis
+
+source(file.path(PROJECT_ROOT, "R", "qc_session.R"))
+```
