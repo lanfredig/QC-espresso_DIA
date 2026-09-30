@@ -27,3 +27,4 @@ Desktop.ini
 !example-data/**/*.fasta
 !example-data/**/*.fa
 !example-data/**/*.faa
+tests/test-results/
