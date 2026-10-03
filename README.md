@@ -12,6 +12,18 @@ The scientific workflow is written in R and can be executed through RStudio or a
 - **RStudio** recommended for interactive use
 - **Quarto** for HTML report generation
 - R package dependencies recorded in `renv.lock`
+- **Rtools45 on Windows**, using the toolchain compatible with R 4.6.x
+
+> [!IMPORTANT]
+> Windows users must install Rtools45 before running `renv::restore()`.
+> The lockfile may require packages to be installed from source. Packages
+> containing compiled C, C++, or Fortran code, including dependencies such
+> as `arrow` and `data.table`, require a working compiler toolchain and build
+> utilities such as `make` and `sh`. These tools are not included in a
+> standard Windows installation and are provided by Rtools45.
+>
+> Rtools44 is intended for R 4.4.x and must not be used with the validated
+> R 4.6.0 environment.
 
 QC-espresso automatically searches for Quarto in the system `PATH`, common standalone installation directories, recent RStudio installations, and a portable runtime located next to the repository.
 
@@ -25,7 +37,7 @@ The portable Windows Release includes:
 - the QC-espresso scientific scripts and report;
 - the `QC-espresso.exe` graphical launcher.
 
-The portable package does not require a separate installation of R, RStudio, or Quarto.
+The portable package does not require separate installations of R, RStudio, Quarto, Rtools, or R packages because the validated package library is distributed with the application.
 
 ### Input files
 
@@ -51,20 +63,85 @@ To use the validated technical branch:
 git checkout jpr-technical-note
 ```
 
-Open the RStudio project:
+#### Windows: install Rtools45
+
+Download and install Rtools45 from the official CRAN page:
+
+https://cran.r-project.org/bin/windows/Rtools/
+
+Use the default installation location:
+
+```text
+C:\rtools45
+```
+
+The default installation is recommended because R 4.6.x can detect the toolchain without additional manual configuration.
+
+After installation, restart R or RStudio and verify that the required build tools are available:
+
+```r
+Sys.which(c("make", "sh", "gcc", "g++"))
+```
+
+Each command should return a valid path. Empty values indicate that the build toolchain is not available to the current R session.
+
+Optionally, if the `pkgbuild` package is available, run:
+
+```r
+pkgbuild::has_build_tools(debug = TRUE)
+```
+
+The result should be `TRUE` before attempting to restore the environment.
+
+#### Open the RStudio project
+
+Open:
 
 ```text
 QC-espresso_DIA.Rproj
 ```
 
-Restore the recorded R environment once from the R console:
+#### Restore the recorded R environment
+
+Run once in the R console:
 
 ```r
-install.packages("renv")
-renv::restore()
+if (!requireNamespace("renv", quietly = TRUE)) {
+  install.packages("renv")
+}
+
+renv::restore(prompt = FALSE)
 ```
 
-The lockfile records the validated R package environment. Quarto must also be available to generate the HTML report.
+The restoration process may compile packages from source. On Windows, do not proceed if Rtools45 is unavailable or if the build-tool checks above fail.
+
+After restoration, confirm that the compiled packages required by the workflow are available and that `arrow` can read the validated Parquet example:
+
+```r
+required_packages <- c("arrow", "data.table")
+
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+
+if (length(missing_packages) > 0L) {
+  stop(
+    "The following required packages are unavailable: ",
+    paste(missing_packages, collapse = ", ")
+  )
+}
+
+arrow::read_parquet(
+  "example-data/dataset_4_contaminans.parquet",
+  as_data_frame = FALSE
+)
+```
+
+Quarto must also be available to generate the HTML report. Verify the installation from a terminal with:
+
+```bash
+quarto --version
+```
 
 ### 2. Portable Windows installation
 
@@ -93,6 +170,8 @@ QC-espresso_v1.3.1_Windows_portable/
     ├── run_qc.R
     └── VERSION
 ```
+
+Rtools45 is not required for the portable Windows Release because the validated R package library is already included. Rtools45 is required only when reproducing the scientific environment from `renv.lock` and source compilation is necessary.
 
 ## Usage
 
@@ -251,6 +330,26 @@ FINAL STATUS: PASS
 The audit is intended for development, review, and release validation. Scientific and reproducible execution should use `run_qc()` directly. The portable executable is a secondary interface for routine Windows use.
 
 ## Troubleshooting
+
+### Rtools45 or Windows build tools are not detected
+
+Confirm that Rtools45 is installed in `C:\rtools45`, restart R or RStudio, and run:
+
+```r
+Sys.which(c("make", "sh", "gcc", "g++"))
+```
+
+If any returned value is empty, reinstall Rtools45 from the official CRAN page and keep the default installation path. Do not substitute Rtools44 for the validated R 4.6.0 environment.
+
+### `arrow` or another compiled package fails during `renv::restore()`
+
+Confirm that Rtools45 is available before retrying the restore. Remove only the failed partial package installation if instructed by `renv`, then run:
+
+```r
+renv::restore(prompt = FALSE)
+```
+
+Review the complete installation log if the failure persists. Compiled dependencies may report the underlying missing compiler, build utility, header, or library explicitly.
 
 ### Quarto is not found during scientific execution
 
