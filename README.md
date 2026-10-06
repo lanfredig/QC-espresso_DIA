@@ -162,6 +162,7 @@ QC-espresso_v1.3.1_Windows_portable/
 │   ├── library/
 │   └── quarto/
 └── QC-espresso_DIA/
+    ├──example-data/
     ├── launcher/
     │   └── QC-espresso.exe
     ├── output/
@@ -218,7 +219,7 @@ result <- run_qc(
 )
 ```
 
-The example data are maintained in the GitHub repository and are not included in the streamlined portable Windows Release.
+The example data are included both in the scientific repository and in the portable Windows Release, allowing users to test the complete workflow before analyzing their own data.
 
 ### 2. Portable Windows executable
 
