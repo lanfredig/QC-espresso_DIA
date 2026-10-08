@@ -1,0 +1,193 @@
+---
+title: "LFQ Benchmark Evaluation"
+author: "QC Espresso"
+output:
+  html_document:
+    df_print: paged
+---
+
+## Analysis Overview
+
+This notebook contains the workflow used to evaluate the three-species LFQ benchmark dataset presented in the QC Espresso manuscript. The analysis uses DIA-NN protein-group quantifications from mixtures of human HEK293, *Saccharomyces cerevisiae*, and *Escherichia coli* K-12 protein lysates prepared at defined proportions and measured in technical triplicates. Metrics describing quantitative accuracy, fold-change recovery, and reproducibility are calculated and visualized to provide a reference example of the expected behavior of a well-performing proteomics experiment.
+
+
+## Libraries
+
+```{r libraries}
+library(tidyverse)
+library(ggridges)
+```
+
+## Import DIA-NN Protein Matrix
+
+```{r import}
+report <- read.delim("report.pg_matrix.tsv", check.names = FALSE)
+```
+
+## Data Preparation
+
+Contaminant protein groups were removed and protein groups assigned to their corresponding species.
+
+```{r preparation}
+df <- report %>%
+  filter(!grepl("crap", Protein.Group, ignore.case = TRUE))
+
+df <- df %>%
+  filter(!(
+      grepl("_HUMAN", Protein.Names) +
+      grepl("_YEAST", Protein.Names) +
+      grepl("_ECOLI", Protein.Names) > 1))
+
+df <- df %>%
+  mutate(species = case_when(
+      grepl("_HUMAN", Protein.Names) ~ "HUMAN",
+      grepl("_YEAST", Protein.Names) ~ "YEAST",
+      grepl("_ECOLI", Protein.Names) ~ "ECOLI",
+      TRUE ~ NA_character_)) %>%
+  filter(!is.na(species))
+```
+
+## Benchmark Design
+
+```{r benchmark-design}
+sample_composition <- tibble(
+  species = c("HUMAN", "YEAST", "ECOLI"),
+  A = c(65, 15, 20),
+  B = c(65, 30, 5)) %>%
+  mutate(expected_logFC = log2(B / A))
+
+sample_composition
+```
+
+## Sample Groups
+
+```{r sample-groups}
+A_cols <- c(
+  "20240509_LFQ_A_1",
+  "20240509_LFQ_A_2",
+  "20240509_LFQ_A_3")
+
+B_cols <- c(
+  "20240509_LFQ_B_1",
+  "20240509_LFQ_B_2",
+  "20240509_LFQ_B_3")
+```
+
+## Protein Filtering
+
+Only proteins quantified in all replicates were retained.
+
+```{r filtering}
+df <- df %>%
+  mutate(
+    nA = rowSums(!is.na(across(all_of(A_cols)))),
+    nB = rowSums(!is.na(across(all_of(B_cols))))) %>%
+  filter(nA == 3, nB == 3)
+```
+
+## Quantitative Metrics
+
+```{r metrics}
+metrics <- df %>%
+  rowwise() %>%
+  mutate(
+    mean_A = mean(c_across(all_of(A_cols))),
+    mean_B = mean(c_across(all_of(B_cols))),
+    sd_A = sd(c_across(all_of(A_cols))),
+    sd_B = sd(c_across(all_of(B_cols))),
+    cv_A = 100 * sd_A / mean_A,
+    cv_B = 100 * sd_B / mean_B,
+    mean_CV = mean(c(cv_A, cv_B), na.rm = TRUE),
+    abundance = log2((mean_A + mean_B) / 2),
+    observed_logFC = log2(mean_B / mean_A)) %>%
+  ungroup()
+```
+
+## Log2 Fold-Change Accuracy
+
+```{r deviation}
+df_metrics <- metrics %>%
+  left_join(sample_composition %>%
+      select(species, expected_logFC), by = "species") %>%
+  mutate(deviation = observed_logFC - expected_logFC) %>%
+  group_by(species) %>%
+  mutate(sd_deviation = sd(deviation, na.rm = TRUE)) %>%
+  ungroup()
+```
+
+## Summary Metrics
+
+```{r summary-metrics}
+accuracy_metrics <- df_metrics %>%
+  filter(is.finite(deviation)) %>%
+  group_by(species) %>%
+  summarise(
+    proteins = n(),
+    sd_ratio = sd(deviation),
+    median_abs_deviation = median(abs(deviation)),
+    .groups = "drop")
+
+cv_metrics <- df_metrics %>%
+  filter(is.finite(mean_CV)) %>%
+  group_by(species) %>%
+  summarise(proteins = n(),
+    median_CV = median(mean_CV),
+    mean_CV = mean(mean_CV),
+    .groups = "drop")
+
+accuracy_metrics
+cv_metrics
+```
+
+## Interquartile Range of Observed Fold Changes
+
+```{r iqr}
+iqr_df <- df_metrics %>%
+  group_by(species) %>%
+  summarise(ymin = quantile(observed_logFC, 0.25, na.rm = TRUE),
+    ymax = quantile(observed_logFC, 0.75, na.rm = TRUE),
+    expected_logFC = first(expected_logFC),
+    .groups = "drop")
+```
+
+## Visualization
+
+```{r colors}
+cols <- c(
+  HUMAN = "#2457A6",
+  YEAST = "#4FC3D9",
+  ECOLI = "#F28E2B")
+```
+
+```{r Box plot}
+ggplot(df_metrics,
+  aes(species, observed_logFC, fill = species)) +
+  geom_boxplot() +
+  scale_fill_manual(values = cols) +
+  theme_classic() +
+  labs(x = NULL,  y = expression(log[2]~Fold~Change))
+```
+
+```{r fig-foldchange}
+ggplot(df_metrics,
+  aes(abundance, observed_logFC, colour = species)) +
+  geom_rect(data = iqr_df,
+    aes(
+      xmin = -Inf,
+      xmax = Inf,
+      ymin = ymin,
+      ymax = ymax,
+      fill = species),
+    inherit.aes = FALSE,
+    alpha = 0.15) +
+  geom_point(alpha = 0.5) +
+  geom_hline(data = sample_composition,
+    aes(yintercept = expected_logFC, colour = species),
+    linetype = 2) +
+  scale_colour_manual(values = cols) +
+  scale_fill_manual(values = cols) +
+  theme_bw() +
+  labs(
+    x = expression(log[2]~Average~Abundance),
+    y = expression(log[2]~Fold~Change~(B/A)))
+```
