@@ -1,7 +1,32 @@
 ###############################################################################
 # File: globals.R
+#
+# Purpose:
+#   Define global visualization settings used by the downstream QC modules,
+#   including the shared color palette, panel layout configuration,
+#   aspect-ratio presets, and standardized ggplot2 legend helpers.
+#
+# Inputs (expected to exist before sourcing):
+#   - None
+#
+# Outputs (objects defined):
+#   - cb_palette    : Global color palette for QC visualizations
+#   - PANELS_PER_ROW: Number of plot panels displayed per row
+#   - AR_DENSITY    : Aspect-ratio preset for density plots
+#   - AR_BOXPLOT    : Aspect-ratio preset for boxplots
+#   - AR_HIST       : Aspect-ratio preset for histograms
+#   - legend_fill   : Helper function for standardized fill legends
+#   - legend_color  : Helper function for standardized color legends
+#
+# Required R packages (loaded by QMD):
+#   - ggplot2
+#   - grid
+#
+# Notes:
+#   - No library() or require() calls are made in this script.
+#   - This script has no data-dependent inputs.
+#   - The defined objects are shared across downstream QC modules.
 ###############################################################################
-
 
 ## 1. Global color palette -----------------------------------------------------
 

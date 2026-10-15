@@ -2,14 +2,38 @@
 # File: qc_session.R
 #
 # Purpose:
-#   Record and report execution environment details used to generate the QC
-#   report, including timestamps, software versions, and loaded package
-#   versions, in order to support reproducibility.
+#   Record and report execution-environment details used to generate the QC
+#   report, including the execution timestamp, R and Quarto versions, and
+#   loaded R package versions.
+#
+# Inputs (expected to exist before sourcing):
+#   - params : Quarto parameters list, optionally containing quarto_exec
+#
+# Outputs (objects defined):
+#   - session_date   : Date and time at which session metadata were captured
+#   - r_version      : R version used to generate the report
+#   - quarto_exec    : Quarto executable path or command obtained from params
+#   - quarto_valid   : Availability flag for the specified Quarto executable
+#   - quarto_version : Detected Quarto version or NA when unavailable
+#   - pkg_info       : Loaded R package information returned by sessionInfo()
+#   - packages       : Loaded R package names and versions
+#   - session_summary: Execution-environment summary table
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - tibble
+#   - gt
 #
 # Notes:
-#   - Robust handling of Quarto executable (NULL, empty, invalid path).
-###############################################################################
-
+#   - No library() or require() calls are made in this script.
+#   - The params object is optional; quarto_exec remains NULL when params or
+#     params$quarto_exec is unavailable.
+#   - The Quarto executable is validated as either an existing file path or a
+#     command available through the system PATH.
+#   - Failure to detect or query Quarto does not interrupt report generation.
+#   - Only packages recorded in sessionInfo()$otherPkgs are included in the
+#     loaded-package table.
+#   - The
 
 ## 1. Capture execution metadata -----------------------------------------------
 

@@ -2,33 +2,51 @@
 # File: qc_intensity.R
 #
 # Purpose:
-#   Evaluate signal intensity distributions at multiple levels, including raw
-#   precursor intensities and protein-level LFQ-normalized intensities, to
-#   assess quantitative consistency and normalization performance across runs.
+#   Visualize quantitative signal distributions across runs using positive
+#   Precursor.Quantity values and one positive PG.MaxLFQ value per run and
+#   protein group.
 #
-# Inputs:
-#   - report
-#   - file_palette
-#   - AR_DENSITY
-#   - AR_BOXPLOT
+# Inputs (expected to exist before sourcing):
+#   - report       : Filtered DIA-NN report data frame
+#   - file_palette : Run-level color palette created by io_load.R
+#   - AR_DENSITY   : Aspect-ratio preset for density plots defined in globals.R
+#   - AR_BOXPLOT   : Aspect-ratio preset for boxplots defined in globals.R
 #
-# Outputs:
-#   - prec_density
-#   - intensity_boxplot
-#   - p_density
-#   - p_box
+# Outputs (objects defined):
+#   - prec_density                  : Positive Precursor.Quantity values per run
+#   - intensity_boxplot             : Positive PG.MaxLFQ values per run and
+#                                     protein group
+#   - p_density                     : Precursor.Quantity density plot or NULL
+#   - p_box                         : Protein-group PG.MaxLFQ boxplot or NULL
+#   - legend_columns                : Number of columns used in the density-plot
+#                                     legend
+#   - pg_maxlfq_values              : Distinct positive PG.MaxLFQ values per run
+#                                     and protein group
+#   - pg_maxlfq_consistency         : Number and listing of distinct PG.MaxLFQ
+#                                     values per run and protein group
+#   - inconsistent_pg_maxlfq        : Run and protein-group combinations with
+#                                     multiple distinct positive PG.MaxLFQ values
+#   - duplicated_protein_values     : Duplicate run and protein-group
+#                                     combinations remaining after deduplication
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - ggplot2
+#   - grid
 #
 # Notes:
-#   - Raw precursor distributions use positive Precursor.Quantity values only.
-#   - Protein-level distributions use one positive PG.MaxLFQ value per
-#     Run + Protein.Group.
+#   - No library() or require() calls are made in this script.
+#   - Precursor-level distributions include only finite, positive
+#     Precursor.Quantity values.
+#   - Protein-group distributions include one finite, positive PG.MaxLFQ value
+#     per Run and Protein.Group combination.
 #   - Repeated identical PG.MaxLFQ values are collapsed.
-#   - Multiple distinct positive PG.MaxLFQ values for the same Run +
-#     Protein.Group are treated as an input inconsistency and stop execution.
-#   - A plot is skipped with an informative message when no valid positive
-#     values are available for that subsection.
+#   - Multiple distinct positive PG.MaxLFQ values for the same Run and
+#     Protein.Group combination are treated as an input inconsistency and stop
+#     execution.
+#   - A plot is skipped when no valid positive values are available for its
+#     corresponding subsection.
 ###############################################################################
-
 
 ## 1. Initialize output objects ------------------------------------------------
 
@@ -38,7 +56,7 @@ p_density <- NULL
 p_box <- NULL
 
 
-## 2. Raw precursor intensity distribution ------------------------------------
+## 2. Raw precursor quantity distribution ------------------------------------
 
 prec_density <- report %>%
   dplyr::select(
@@ -82,7 +100,7 @@ if (nrow(prec_density) > 0L) {
       values = file_palette
     ) +
     ggplot2::labs(
-      title = "Precursor Intensity Density (Raw Signal)",
+      title = "Precursor Quantity Distribution)",
       x = "Precursor quantity (log10)",
       y = "Density"
     ) +
@@ -214,7 +232,7 @@ if (nrow(inconsistent_pg_maxlfq) > 0L) {
 }
 
 
-## 4. Protein-level LFQ intensity distribution ---------------------------------
+## 4. Protein-group PG.MaxLFQ distribution ---------------------------------
 
 intensity_boxplot <- pg_maxlfq_values %>%
   dplyr::select(
@@ -267,7 +285,7 @@ if (nrow(intensity_boxplot) > 0L) {
       values = file_palette
     ) +
     ggplot2::labs(
-      title = "Protein Intensity Distribution (LFQ-normalized)",
+      title = "Protein-Group Intensity (LFQ-normalized)",
       x = "Run",
       y = "PG.MaxLFQ (log10)"
     ) +

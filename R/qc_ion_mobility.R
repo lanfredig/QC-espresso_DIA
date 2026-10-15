@@ -2,19 +2,31 @@
 # File: qc_ion_mobility.R
 #
 # Purpose:
-#   Evaluate ion mobility performance across runs using:
-#   1. Precursor m/z vs ion mobility density structure
-#   2. Observed vs predicted ion mobility trends with per-run QC metrics
+#   Visualize ion mobility patterns across runs using the joint distribution
+#   of precursor m/z and the available ion mobility field, and compare the
+#   linear trends of observed ion mobility and DIA-NN iIM values when iIM is
+#   available.
 #
 # Inputs (expected to exist before sourcing):
-#   - report                  : Filtered DIA-NN report data frame
-#   - PANELS_PER_ROW          : Number of panels per row in facetted plots
-#   - AR_DENSITY              : Aspect ratio constant for density-like plots
-#   - HAS_VALID_ION_MOBILITY  : Logical flag computed upstream in QMD
+#   - report         : Filtered DIA-NN report data frame
+#   - PANELS_PER_ROW : Number of panels per row defined in globals.R
+#   - AR_DENSITY     : Aspect-ratio preset for density-like plots defined in
+#                      globals.R
 #
-# Outputs:
-#   - Ion mobility density plot rendered to the active graphics device
-#   - Observed vs library predicted ion mobility trend plot rendered when applicable
+# Outputs (objects defined):
+#   - im_candidates           : Candidate names for the observed ion mobility field
+#   - im_col                  : Ion mobility column selected from the report
+#   - im_df                   : Valid precursor m/z, ion mobility, and iIM values
+#   - run_has_valid_im_trend  : Helper function for assessing whether a run
+#                               supports linear trend fitting
+#   - p_im_density            : Precursor m/z versus ion mobility density plot
+#   - valid_trend_runs_df     : Trend-fitting availability by run
+#   - trend_runs_vec          : Runs meeting the trend-fitting requirements
+#   - im_trend_df             : Ion mobility values from runs valid for trend fitting
+#   - df_long                 : Long-format observed ion mobility and iIM values
+#   - metrics_df              : Linear-model coefficients and squared correlation
+#                               between observed ion mobility and iIM by run
+#   - p_trend                 : Observed ion mobility versus iIM trend plot
 #
 # Required R packages (loaded by QMD):
 #   - dplyr
@@ -22,17 +34,25 @@
 #   - ggplot2
 #   - tibble
 #   - rlang
+#   - stats
 #
 # Notes:
-#   - This script assumes ion mobility validity has already been determined
-#     upstream in the QMD.
-#   - The script is source()-safe and does not use return() at top level.
-#   - Plot generation is skipped only if no ion mobility column is present,
-#     as a defensive safeguard against accidental standalone execution.
-#   - IM values equal to zero are excluded from plotting because datasets from
-#     instruments without ion mobility may encode absent IM as 0.
+#   - No library() or require() calls are made in this script.
+#   - The observed ion mobility field is selected from IM, Ion.Mobility,
+#     Precursor.Ion.Mobility, or 1/K0, using the first available field in that
+#     order.
+#   - DIA-NN iIM values are analyzed only when the iIM column is available.
+#   - The script does not use Predicted.IM.
+#   - Ion mobility values equal to zero are excluded because datasets from
+#     instruments without ion mobility may encode unavailable values as zero.
+#   - Trend fitting requires at least five complete observations and at least
+#     two distinct values for Precursor.Mz, observed ion mobility, and iIM.
+#   - The reported R² is the squared Pearson correlation between observed ion
+#     mobility and iIM, rather than the coefficient of determination from a
+#     regression of one field against the other.
+#   - Plot generation is skipped when no supported ion mobility column or no
+#     valid non-zero ion mobility values are available.
 ###############################################################################
-
 
 ## 1. Detect ion mobility column -----------------------------------------------
 
@@ -144,7 +164,7 @@ if (!is.na(im_col)) {
     print(p_im_density)
     
     
-    ## 2.4 Identify runs valid for observed vs predicted trend comparison ------
+    ## 2.4 Identify runs valid for observed ion mobility and iIM comparison ----
     
     valid_trend_runs_df <- im_df %>% 
       dplyr::group_by(Run) %>% 
@@ -163,7 +183,7 @@ if (!is.na(im_col)) {
       dplyr::filter(Run %in% trend_runs_vec)
     
     
-    ## 2.5 Plot 2: observed vs predicted ion mobility trends -------------------
+    ## 2.5 Plot 2: observed ion mobility and iIM trends ------------------------
     
     if (nrow(im_trend_df) > 0) {
       
@@ -258,8 +278,8 @@ if (!is.na(im_col)) {
           ncol = PANELS_PER_ROW
         ) +
         ggplot2::labs(
-          title    = "Observed vs Predicted IM Trends",
-          subtitle = "Linear trend comparison",
+          title    = "Observed Ion Mobility and DIA-NN iIM Trends",
+          subtitle = "Separate linear trends across precursor m/z",
           x        = "Precursor m/z",
           y        = "Ion Mobility"
         ) +

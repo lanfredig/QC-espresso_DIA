@@ -2,8 +2,60 @@
 # File: qc_figures_of_merit.R
 #
 # Purpose:
-#   Generate a consolidated run-level QC summary table (Figures of Merit),
-#   export the table as CSV, and expose it for rendering in the QMD report.
+#   Generate a consolidated run-level QC summary table containing
+#   identification, chromatography, retention-time deviation, mass-error,
+#   peptide, precursor-charge, and contaminant-signal metrics, export the
+#   table as CSV, and expose it for rendering in the QMD report.
+#
+# Inputs (expected to exist before sourcing):
+#   - report      : Filtered DIA-NN report data frame
+#   - results_dir : Canonical output directory created by io_load.R
+#
+# Outputs (objects defined):
+#   - count_missed_tryptic_cleavages : Helper function for counting missed
+#                                      tryptic cleavages, if not already defined
+#   - fom_available                  : Availability flag for the required inputs
+#   - run_reference                 : Distinct runs included in the summary
+#   - identification_df             : Identification counts per run
+#   - chromatography_df             : Median FWHM and peak base width per run
+#   - rt_reference                  : Median retention time per run and precursor
+#   - n_runs_rt                     : Number of runs represented in rt_reference
+#   - min_runs_required             : Minimum run-frequency threshold for
+#                                     retention-time deviation assessment
+#   - shared_precursors             : Precursors meeting the run-frequency
+#                                     threshold
+#   - rt_df                         : Median absolute retention-time deviation
+#                                     per run
+#   - mass_df                       : Median MS1 apex mass error per run
+#   - peptide_df                    : Median peptide length and percentage of
+#                                     peptides with missed cleavages per run
+#   - charge_df                     : Percentages of charge 2 and charge 3
+#                                     precursors per run
+#   - contaminant_df                : Contaminant signal percentage per run
+#   - figures_of_merit_df           : Consolidated run-level QC summary table
+#   - figures_of_merit_csv          : Path to the exported Figures of Merit CSV
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - stringr
+#
+# Notes:
+#   - No library() or require() calls are made in this script.
+#   - The missed-cleavage helper is defined only when a function with the same
+#     name is not already available.
+#   - Identification counts are based on distinct Precursor.Id,
+#     Modified.Sequence, and Protein.Group values per run.
+#   - Chromatographic widths are converted from minutes to seconds.
+#   - Retention-time deviation is calculated for precursors observed in at
+#     least half of the represented runs, with a minimum of two runs.
+#   - Mass error is calculated from Ms1.Apex.Mz.Delta relative to
+#     Precursor.Mz and expressed in parts per million.
+#   - Missed-cleavage and peptide-length metrics are calculated from distinct
+#     Stripped.Sequence values per run.
+#   - Charge-state percentages are calculated from distinct combinations of
+#     Run, Precursor.Id, and Precursor.Charge.
+#   - Contaminants are recognized when CON_ or cRAP- occurs at the beginning
+#     of any accession within a protein group.
 ###############################################################################
 
 ## 0. Shared missed-cleavage calculation --------------------------------------

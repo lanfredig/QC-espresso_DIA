@@ -2,16 +2,50 @@
 # File: validate_inputs.R
 #
 # Purpose:
-#   Validate the scientific QC-espresso execution environment, input files,
-#   DIA-NN report schema, FASTA structure, and output directory before the
-#   analytical workflow is started.
+#   Define validation functions for the scientific QC-espresso execution
+#   environment, DIA-NN Parquet report, FASTA reference, output directory,
+#   and required DIA-NN report schema before the analytical workflow starts.
+#
+# Inputs (expected to exist before sourcing):
+#   - None
+#
+# Outputs (objects defined):
+#   - qc_required_packages        : Function returning the required R package names
+#   - qc_required_report_columns  : Function returning the required DIA-NN
+#                                   report column names
+#   - qc_optional_report_columns  : Function returning the optional DIA-NN
+#                                   ion mobility column names
+#   - validate_scalar_path        : Function validating a scalar file-system path
+#   - validate_report_file        : Function validating the DIA-NN Parquet file
+#   - validate_fasta_file         : Function validating the FASTA reference file
+#   - validate_required_packages  : Function validating required R package
+#                                   availability
+#   - validate_report_schema      : Function validating the DIA-NN report schema
+#   - validate_output_directory   : Function validating output-directory
+#                                   creation and write access
+#   - validate_qc_inputs          : Function combining package, report, FASTA,
+#                                   schema, and output-directory validation
+#
+# Required R packages (loaded by QMD):
+#   - None
 #
 # Notes:
-#   - This file defines validation functions only.
-#   - No validation is performed automatically when this file is sourced.
-#   - No analytical result is calculated or modified by these functions.
+#   - No library() or require() calls are made in this script.
+#   - This script defines validation functions only.
+#   - No validation is performed automatically when the script is sourced.
+#   - Package availability is evaluated with requireNamespace() only when
+#     validate_required_packages() is called.
+#   - The DIA-NN report schema is inspected with arrow::open_dataset() only
+#     when validate_report_schema() is called.
+#   - FASTA validation requires a non-empty file with a .fasta, .fa, or .faa
+#     extension and at least one recognizable header within the first 100
+#     non-empty lines.
+#   - Output-directory validation creates the directory when necessary and
+#     verifies write access using a temporary test file.
+#   - validate_qc_inputs() returns an object with class
+#     qc_espresso_validated_inputs.
+#   - No analytical results are calculated or modified by these functions.
 ###############################################################################
-
 
 ## 1. Required package definitions --------------------------------------------
 
@@ -473,7 +507,7 @@ validate_output_directory <- function(output_dir) {
 }
 
 
-## 10. Combined scientific input validation -----------------------------------
+## 10. Combined scientific workflow validation -----------------------------------
 
 validate_qc_inputs <- function(
     report_path,

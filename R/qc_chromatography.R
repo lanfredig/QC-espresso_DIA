@@ -2,17 +2,38 @@
 # File: qc_chromatography.R
 #
 # Purpose:
-#   Generate chromatography-focused QC plots across runs, covering retention-
-#   time identification density, precursor peak width at half maximum (FWHM),
-#   and precursor peak base width distributions.
+#   Generate chromatography-focused QC plots across runs, covering the
+#   distribution of retained DIA-NN report entries over retention time,
+#   precursor peak width at half maximum (FWHM), and precursor peak base
+#   width distributions.
 #
-# Inputs:
-#   - report
-#   - file_palette
+# Inputs (expected to exist before sourcing):
+#   - report       : Filtered DIA-NN report data frame
+#   - file_palette : Run-level color palette created by io_load.R
 #
-# Outputs:
-#   - Printed ggplot objects when valid values are available
-#   - Informative messages when a subsection has no valid values
+# Outputs (objects defined):
+#   - id_vs_rt      : Retention-time values for retained report entries
+#   - FWHM          : Precursor FWHM values converted to seconds
+#   - FWHM_stat     : Median precursor FWHM per run
+#   - peak_base     : Precursor peak base widths calculated in seconds
+#   - peak_base_stat: Median precursor peak base width per run
+#   - p_rt          : Retention-time distribution plot for the current run group
+#   - p_fwhm        : FWHM distribution plot for the current run group
+#   - p_base        : Peak base-width distribution plot for the current run group
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - ggplot2
+#
+# Notes:
+#   - No library() or require() calls are made in this script.
+#   - Retention-time distributions represent rows retained in the filtered
+#     DIA-NN report rather than counts of unique peptides or precursors.
+#   - FWHM values are converted from minutes to seconds.
+#   - Peak base width is calculated as RT.Stop minus RT.Start and converted
+#     from minutes to seconds.
+#   - Runs are displayed in groups of up to three facets.
+#   - Plot objects are created only when valid values are available.
 ###############################################################################
 
 ## 1. Identification density over retention time ------------------------------
@@ -53,7 +74,7 @@ if (nrow(id_vs_rt) > 0L) {
       ) +
       ggplot2::labs(
         title = "Identifications over Retention Time per Run",
-        subtitle = "Distribution of peptide identifications across the LC gradient",
+        subtitle = "Distribution of precursor entries across the LC gradient",
         x = "Retention Time (min)",
         y = "Count"
       ) +

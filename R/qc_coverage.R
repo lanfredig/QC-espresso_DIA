@@ -2,11 +2,45 @@
 # File: qc_coverage.R
 #
 # Purpose:
-#   Compute protein sequence coverage using peptide evidence, export a complete
-#   coverage table including peptide mappings, prepare a Top 100 summary table,
-#   and visualize the global distribution when enough positive values exist.
+#   Compute protein sequence coverage from peptide evidence, export coverage
+#   results for proteins with mapped peptide evidence, prepare a Top 100
+#   coverage summary, and visualize the distribution of positive sequence
+#   coverage values when sufficient data are available.
+#
+# Inputs (expected to exist before sourcing):
+#   - fasta_ref      : Parsed FASTA reference table created by io_load.R
+#   - peptides_clean : Peptide lists grouped by protein group, created by io_load.R
+#   - results_dir    : Canonical output directory created by io_load.R
+#
+# Outputs (objects defined):
+#   - calculate_coverage         : Helper function for calculating covered residues
+#   - coverage_available         : Availability flag for the required input objects
+#   - coverage_results           : Sequence coverage results for all FASTA proteins
+#   - coverage_results_detected  : Coverage results for proteins with mapped residues
+#   - coverage_results_top100    : Top 100 proteins ranked by sequence coverage
+#   - coverage_results_graph     : Positive sequence coverage values used for plotting
+#   - output_csv                 : Path to the exported protein coverage CSV file
+#   - p_coverage                 : Protein sequence coverage density plot or NULL
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - purrr
+#   - stringr
+#   - ggplot2
+#
+# Notes:
+#   - No library() or require() calls are made in this script.
+#   - Peptides are mapped to protein sequences by exact fixed-string matching.
+#   - All occurrences of each unique peptide are included when calculating
+#     covered residues.
+#   - Overlapping peptide mappings do not duplicate covered residue counts.
+#   - The complete in-memory coverage table includes all proteins in fasta_ref.
+#   - The exported CSV includes only proteins with at least one covered residue.
+#   - The Top 100 summary is ranked by descending sequence coverage percentage.
+#   - The density plot includes only proteins with positive sequence coverage
+#     and is generated when at least two such proteins are available.
 ###############################################################################
-
+`
 ## 1. Protein sequence coverage helper ----------------------------------------
 
 calculate_coverage <- function(seq, peps) {
@@ -66,7 +100,7 @@ if (!exists("results_dir")) {
   coverage_available <- FALSE
 }
 
-## 3. Execute only if inputs are available ------------------------------------
+## 3. Compute, export, and summarize protein sequence coverage ------------------------------------
 
 if (isTRUE(coverage_available)) {
   coverage_results <- fasta_ref %>%

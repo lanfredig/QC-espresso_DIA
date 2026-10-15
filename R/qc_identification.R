@@ -2,17 +2,21 @@
 # File: qc_identification.R
 #
 # Purpose:
-#   Quantify identification depth across runs at multiple levels of resolution,
-#   including modified peptides, precursors, and protein groups, and visualize
-#   identification counts with global reference statistics.
+#   Quantify identification depth across runs for distinct modified sequences,
+#   precursors, and protein groups, and visualize per-run counts with global
+#   mean, maximum, and total reference values.
 #
 # Inputs (expected to exist before sourcing):
-#   - report         : Filtered DIA-NN report data frame
+#   - report : Filtered DIA-NN report data frame
 #
 # Outputs (objects defined):
-#   - id_depth_long    : Long-format table of identification counts per run
-#   - id_depth_summary : Per-run identification summary table (wide format)
-#   - Identification depth bar plots rendered to the active graphics device
+#   - id_depth_long    : Long-format identification counts per run and level
+#   - avgmax           : Global mean and maximum per-run counts by level
+#   - total_ids        : Total distinct identifiers across all runs by level
+#   - collapsed_labels : Reference statistics and annotation positions by level
+#   - mid_runs         : Runs used to position reference-statistic labels
+#   - p_ident          : Identification-depth bar plot
+#   - id_depth_summary : Per-run identification summary table
 #
 # Required R packages (loaded by QMD):
 #   - dplyr
@@ -21,11 +25,15 @@
 #   - scales
 #
 # Notes:
-#   - Identification depth is reported independently at each level and does not
-#     imply hierarchy or aggregation between identifiers.
-#   - Global average and maximum values are visualized as reference benchmarks.
+#   - No library() or require() calls are made in this script.
+#   - Identification depth is calculated independently for distinct
+#     Modified.Sequence, Precursor.Id, and Protein.Group values.
+#   - Per-run mean and maximum counts are calculated across all retained runs.
+#   - Total counts represent distinct identifiers across the complete filtered
+#     DIA-NN report.
+#   - The three identification levels are reported independently and do not
+#     imply hierarchy or aggregation between identifier types.
 ###############################################################################
-
 
 ## 1. Identification counts (long format) --------------------------------------
 

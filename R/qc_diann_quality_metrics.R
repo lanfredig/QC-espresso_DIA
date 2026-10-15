@@ -2,20 +2,41 @@
 # File: qc_diann_quality_metrics.R
 #
 # Purpose:
-#   Visualization-only QC for DIA-NN quantification quality.
+#   Visualize DIA-NN-derived quantification quality fields at the precursor
+#   and protein-group levels, including the joint distribution of
+#   Quantity.Quality and Empirical.Quality and the relationship between
+#   PG.MaxLFQ.Quality and the number of distinct supporting precursors.
 #
-# Plots:
-#   1. Joint precursor reliability space
-#   2. Protein-group MaxLFQ quality versus precursor support
+# Inputs (expected to exist before sourcing):
+#   - report       : Filtered DIA-NN report data frame
+#   - file_palette : Run-level color palette created by io_load.R
+#
+# Outputs (objects defined):
+#   - qc_precursor : Valid Quantity.Quality and Empirical.Quality observations
+#   - p_joint      : Joint precursor quality-metric plot for the current run group
+#   - qc_protein   : Protein-group quality values and distinct precursor counts
+#   - p_pg         : Protein-group quality versus precursor-count plot for the
+#                    current run group
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - ggplot2
 #
 # Notes:
+#   - No library() or require() calls are made in this script.
+#   - Quantity.Quality, Empirical.Quality, and PG.MaxLFQ.Quality are
+#     DIA-NN-derived QuantUMS-related quality fields.
+#   - The precursor-level plot shows the joint distribution of
+#     Quantity.Quality and Empirical.Quality using two-dimensional bins.
+#   - The protein-group-level plot relates PG.MaxLFQ.Quality to the number
+#     of distinct Precursor.Id values per run and protein group.
 #   - The two subsections are evaluated independently.
-#   - A subsection is skipped with an informative message when its columns are
-#     present but contain no valid observations.
+#   - Runs are displayed in groups of up to three facets.
+#   - A subsection is skipped when its required fields contain no valid
+#     observations.
 ###############################################################################
 
-## 1. Joint precursor reliability space ---------------------------------------
-
+## 1. Joint precursor quality-metric space ------------------------------------
 qc_precursor <- report %>%
   dplyr::select(
     Run,
@@ -70,7 +91,7 @@ if (nrow(qc_precursor) > 0L) {
         ncol = 3
       ) +
       ggplot2::labs(
-        title = "Joint Precursor Reliability Space",
+        title = "Joint Precursor Quality-Metric Space",
         subtitle = "Quantity.Quality vs Empirical.Quality",
         x = "Quantity.Quality",
         y = "Empirical.Quality"
@@ -86,8 +107,7 @@ if (nrow(qc_precursor) > 0L) {
   )
 }
 
-## 2. Protein-group MaxLFQ quality versus precursor support --------------------
-
+## 2. Protein-group MaxLFQ quality versus precursor count ----------------------
 qc_protein <- report %>%
   dplyr::select(
     Run,
@@ -153,8 +173,8 @@ if (nrow(qc_protein) > 0L) {
       ggplot2::scale_x_log10() +
       ggplot2::coord_cartesian(ylim = c(0, 1)) +
       ggplot2::labs(
-        title = "Protein Quantification Stability",
-        subtitle = "MaxLFQ consistency versus precursor support",
+        title = "Protein-Group MaxLFQ Quality versus Precursor Count",
+        subtitle = "PG.MaxLFQ.Quality versus  number of distinct precursors per protein group",
         x = "Number of precursors (log scale)",
         y = "PG.MaxLFQ.Quality"
       ) +

@@ -2,33 +2,35 @@
 # File: qc_chromatography_internalstd.R
 #
 # Purpose:
-#   Generate QC plots for internal trypsin autolysis precursors, covering
-#   retention-time reproducibility and quantitative signal stability across runs.
+#   Generate QC plots for predefined trypsin autolysis precursors, covering
+#   retention-time reproducibility and quantitative signal stability across
+#   runs.
 #
 # Inputs (expected to exist before sourcing):
-#   - report:
-#       Data frame containing at least the following columns:
-#       Run, Precursor.Id, RT, Precursor.Quantity
-#   - legend_color:
-#       Helper function used to apply the standard color legend styling
+#   - report       : Filtered DIA-NN report data frame containing Run,
+#                    Precursor.Id, RT, and Precursor.Quantity
+#   - legend_color : Standardized color-legend helper defined in globals.R
 #
-# Outputs:
-#   - Printed ggplot objects for:
-#       1. RT reproducibility of trypsin autolysis peptides across runs
-#       2. Quantitative stability of trypsin autolysis peptides across runs
-#   - Informative messages when no matching trypsin precursors are detected
+# Outputs (objects defined):
+#   - TRYPSIN_PRECURSORS : Predefined trypsin autolysis precursor identifiers
+#   - TRYPSIN_COLORS     : Colors assigned to the monitored precursors
+#   - trypsin_rt         : Retention-time values for monitored precursors
+#   - p_rt_std           : Retention-time reproducibility plot
+#   - trypsin_quant      : Quantitative values for monitored precursors
+#   - p_quant_std        : Quantitative signal-stability plot
 #
 # Required R packages (loaded by QMD):
 #   - dplyr
 #   - ggplot2
 #
 # Notes:
-#   - The script focuses on the predefined trypsin autolysis precursors:
-#       VATVSLPR2, LSSPATLNSR2, LGEHNIDVLEGNEQFINAAK3
-#   - Colors are explicitly assigned to each monitored precursor for consistency
-#     across plots
-#   - This script assumes that all required objects and helper functions are
-#     already available in the environment before sourcing
+#   - No library() or require() calls are made in this script.
+#   - The script monitors the predefined trypsin autolysis precursors
+#     VATVSLPR2, LSSPATLNSR2, and LGEHNIDVLEGNEQFINAAK3.
+#   - Colors are explicitly assigned to each monitored precursor for
+#     consistency across plots.
+#   - Plot objects are created only when matching precursor entries are
+#     available in the filtered DIA-NN report.
 ###############################################################################
 
 ## 1. Internal standard RT and signal stability (trypsin) ---------------------
@@ -76,7 +78,7 @@ if (nrow(trypsin_rt) > 0) {
     ) +
     ggplot2::scale_color_manual(values = TRYPSIN_COLORS) +
     ggplot2::labs(
-      title = "RT Reproducibility — Trypsin Autolysis Peptides",
+      title = "RT Reproducibility — Trypsin Autolysis Precursorss",
       x     = "Run",
       y     = "Retention Time (min)"
     ) +
@@ -126,7 +128,7 @@ if (nrow(trypsin_quant) > 0) {
     ) +
     ggplot2::scale_fill_manual(values = TRYPSIN_COLORS) +
     ggplot2::labs(
-      title = "Quantitative Stability — Trypsin Autolysis Peptides",
+      title = "Quantitative Stability — Trypsin Autolysis Precursors",
       x     = "Run",
       y     = "Precursor Quantity"
     ) +

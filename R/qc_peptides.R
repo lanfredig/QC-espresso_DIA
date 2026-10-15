@@ -2,10 +2,60 @@
 # File: qc_peptides.R
 #
 # Purpose:
-#   Summarize peptide-related quality characteristics derived from identified
-#   precursors and peptide sequences, including precursor charge-state
-#   distribution, peptide length distribution, and digestion efficiency as
-#   assessed by missed tryptic cleavages.
+#   Summarize peptide-related QC characteristics across runs, including
+#   precursor charge-state frequencies, stripped peptide-sequence lengths,
+#   and the proportion of unique stripped peptide sequences with at least one
+#   missed tryptic cleavage.
+#
+# Inputs (expected to exist before sourcing):
+#   - report       : Filtered DIA-NN report data frame
+#   - cb_palette   : Global color palette defined in globals.R
+#   - file_palette : Run-level color palette created by io_load.R
+#
+# Outputs (objects defined):
+#   - count_missed_tryptic_cleavages : Helper function for counting missed
+#                                      tryptic cleavages, if not already defined
+#   - precursor_level                : Distinct precursor identifiers and charge
+#                                      states per run
+#   - peptide_level                  : Distinct stripped peptide sequences,
+#                                      lengths, and missed-cleavage counts per run
+#   - chrg                           : Precursor charge-state frequencies per run
+#   - charge_colors                  : Colors assigned to precursor charge states
+#   - p_charge                       : Charge-state distribution plot for the
+#                                      current run group
+#   - pep_len                        : Stripped peptide-sequence lengths per run
+#   - pep_len_stat                   : Median peptide length and annotation
+#                                      position per run
+#   - pep_len_ymax                   : Maximum peptide-length histogram count
+#                                      per run
+#   - p_len                          : Peptide-length distribution plot for the
+#                                      current run group
+#   - missed_cleavages               : Frequency of unique stripped peptide
+#                                      sequences with missed tryptic cleavages
+#                                      per run
+#   - p_miss                         : Missed-tryptic-cleavage frequency plot
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - ggplot2
+#   - scales
+#   - stringr
+#   - grDevices
+#
+# Notes:
+#   - No library() or require() calls are made in this script.
+#   - The missed-cleavage helper is defined only when a function with the same
+#     name is not already available.
+#   - Precursor charge-state frequencies are calculated from distinct
+#     combinations of Run, Precursor.Id, and Precursor.Charge.
+#   - Peptide length and missed-cleavage metrics are calculated from distinct
+#     Stripped.Sequence values within each run.
+#   - A missed tryptic cleavage is counted at an internal lysine or arginine
+#     not followed by proline.
+#   - The missed-cleavage metric represents the proportion of unique stripped
+#     peptide sequences with at least one missed tryptic cleavage.
+#   - Runs are displayed in groups of up to three facets for the charge-state
+#     and peptide-length distributions.
 ###############################################################################
 
 ## 0. Shared missed-cleavage calculation --------------------------------------
@@ -213,7 +263,7 @@ for (grp in run_groups) {
   print(p_len)
 }
 
-## 4. Digestion efficiency: missed cleavages ----------------------------------
+## 4. Missed tryptic cleavage frequency ----------------------------------
 
 missed_cleavages <- peptide_level %>%
   dplyr::group_by(Run) %>%
@@ -249,7 +299,7 @@ p_miss <- ggplot2::ggplot(
     expand = ggplot2::expansion(mult = c(0, 0.05))
   ) +
   ggplot2::labs(
-    title = "Digestion Efficiency per Run",
+    title = "Missed Tryptic Cleavage Frequency per Run",
     subtitle = "Fraction of unique peptide sequences with at least one missed tryptic cleavage",
     x = "Run",
     y = "Percentage (%)"

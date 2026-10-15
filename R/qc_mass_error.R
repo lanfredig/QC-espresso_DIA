@@ -2,15 +2,43 @@
 # File: qc_mass_error.R
 #
 # Purpose:
-#   Compute and visualize precursor mass measurement error (ppm) across runs
-#   in order to assess mass accuracy, centering, and stability of the DIA
-#   acquisition.
+#   Calculate precursor mass error in parts per million from the DIA-NN
+#   Ms1.Apex.Mz.Delta and Precursor.Mz fields, summarize its median per run,
+#   and visualize its distribution and variation across precursor m/z.
+#
+# Inputs (expected to exist before sourcing):
+#   - report : Filtered DIA-NN report data frame
+#
+# Outputs (objects defined):
+#   - mass_error             : Valid positive-quantity observations with
+#                              calculated precursor mass error in ppm
+#   - mass_error_stat        : Median precursor mass error per run
+#   - p_mass_runs            : Runs included in the mass-error distributions
+#   - p_mass_run_groups      : Run groups used for facetted distribution plots
+#   - p_mass                 : Mass-error distribution plot for the current
+#                              run group
+#   - binned                 : Median mass error across precursor m/z bins
+#   - p_bin                  : Binned mass-error plot for the current run group
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - ggplot2
 #
 # Notes:
-#   - Mass error is consistently expressed in ppm across all plots.
-#   - The visual range of -10 to 10 ppm is intentionally retained.
-#   - The section is skipped with an informative message when no valid mass-
-#     error observations remain after filtering.
+#   - No library() or require() calls are made in this script.
+#   - Mass error is calculated as Ms1.Apex.Mz.Delta divided by Precursor.Mz
+#     and converted to parts per million.
+#   - Only observations with positive Precursor.Quantity and positive
+#     Precursor.Mz values are included.
+#   - Mass error is expressed consistently in parts per million across all
+#     plots.
+#   - The mass-error distribution is displayed within a fixed visual range
+#     from -10 to 10 ppm.
+#   - The relationship between mass error and precursor m/z is summarized
+#     using 50 precursor m/z bins and the median mass error within each bin.
+#   - Runs are displayed in groups of up to three facets.
+#   - Plot generation is skipped when no valid mass-error observations are
+#     available.
 ###############################################################################
 
 ## 1. Compute precursor mass error --------------------------------------------
@@ -130,8 +158,7 @@ if (nrow(mass_error) == 0L) {
     print(p_mass)
   }
 
-  ## 4. Mass error versus precursor m/z ---------------------------------------
-
+## 4. Binned median mass error across precursor m/z -------------------------
   binned <- mass_error %>%
     dplyr::mutate(
       bin = cut(Precursor.Mz, breaks = 50)
@@ -178,7 +205,7 @@ if (nrow(mass_error) == 0L) {
         ) +
         ggplot2::theme_minimal() +
         ggplot2::labs(
-          title = "Mass Error Bias Across m/z (Binned Median)",
+          title = "Median Mass Error Across Precursor m/z Bins",
           x = "Precursor m/z",
           y = "Median mass error (ppm)"
         )

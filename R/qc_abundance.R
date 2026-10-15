@@ -4,27 +4,41 @@
 # Purpose:
 #   Quantify and visualize protein-group signal composition across runs,
 #   annotate single- and multi-protein groups using the centralized FASTA
-#   reference, and generate contaminant-specific profiles when recognized
-#   contaminant annotations exist.
+#   reference, and generate contaminant-specific signal profiles when
+#   recognized contaminant annotations are available.
 #
-# Inputs:
-#   - report
-#   - fasta_ref
-#   - cb_palette
-#   - legend_fill
+# Inputs (expected to exist before sourcing):
+#   - report      : Filtered DIA-NN report data frame
+#   - fasta_ref   : Parsed FASTA reference table created by io_load.R
+#   - cb_palette  : Global color palette defined in globals.R
+#   - legend_fill : Standardized fill-legend helper defined in globals.R
 #
-# Outputs:
-#   - protein_group_annotation
-#   - report_labeled
-#   - protein_group_signal
-#   - abundance
-#   - p_abundance
-#   - p_contaminants
-#   - CONTAMINANT_PREFIXES_AVAILABLE
-#   - CONTAMINANT_SIGNAL_AVAILABLE
-#   - contaminant_fraction
+# Outputs (objects defined):
+#   - protein_group_annotation           : Protein-group annotation summary
+#   - report_labeled                     : DIA-NN report with protein-group annotations
+#   - multi_protein_annotation_summary   : Annotation summary for multi-protein groups
+#   - protein_group_signal               : Aggregated protein-group signal per run
+#   - top_gene_labels                    : Top annotation labels by total signal
+#   - abundance                          : Relative signal composition per run
+#   - p_abundance                        : Protein-group signal-composition plot
+#   - CONTAMINANT_PREFIXES_AVAILABLE     : Availability flag for recognized contaminant prefixes
+#   - CONTAMINANT_SIGNAL_AVAILABLE       : Availability flag for positive contaminant signal
+#   - contaminant_abundance              : Relative contaminant signal composition per run
+#   - contaminant_fraction               : Contaminant fraction of total signal per run
+#   - top_contaminants                   : Top contaminant annotation labels by total signal
+#   - p_contaminants                     : Contaminant signal-composition plot or NULL
+#
+# Required R packages (loaded by QMD):
+#   - dplyr
+#   - tidyr
+#   - forcats
+#   - ggplot2
+#   - scales
+#   - grDevices
+#   - grid
 #
 # Notes:
+#   - No library() or require() calls are made in this script.
 #   - Quantitative values remain assigned to the original DIA-NN
 #     Protein.Group.
 #   - Multi-protein groups are expanded only for FASTA annotation and are
@@ -33,6 +47,8 @@
 #   - Quantitative signal is never duplicated across individual accessions.
 #   - Contaminants are recognized when CON_ or cRAP- occurs at the beginning
 #     of any accession within a protein group.
+#   - The contaminant plot is generated only when recognized contaminant
+#     prefixes and positive contaminant Precursor.Quantity values are present.
 ###############################################################################
 
 ## 1. Freeze run order ---------------------------------------------------------

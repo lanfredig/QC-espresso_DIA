@@ -2,29 +2,41 @@
 # File: qc_completeness.R
 #
 # Purpose:
-#   Assess precursor-level data completeness without materializing a dense
-#   run-by-precursor matrix.
+#   Assess precursor-level quantitative data completeness without materializing
+#   a dense run-by-precursor matrix.
 #
-# Inputs:
+# Inputs (expected to exist before sourcing):
 #   - report : Filtered DIA-NN report data frame
 #
-# Outputs:
-#   - data_complt             : Distinct long-format quantitative observations
+# Outputs (objects defined):
+#   - completeness_input      : Valid run, precursor, and quantitative entries
+#   - run_reference           : Distinct runs included in the assessment
+#   - precursor_reference     : Distinct precursor identifiers included in the assessment
+#   - n_runs                  : Number of retained runs
+#   - n_precursors            : Number of retained precursor identifiers
+#   - total_possible          : Number of possible run–precursor combinations
+#   - data_complt             : Long-format observation status per run and precursor
+#   - observed                : Number of observed run–precursor combinations
+#   - completeness_global_pct : Global quantitative data completeness percentage
 #   - completeness_global_df  : Global data completeness summary table
 #   - completeness_per_run_df : Per-run data completeness summary table
 #
-# Required R packages:
+# Required R packages (loaded by QMD):
 #   - dplyr
 #   - tibble
 #
 # Notes:
-#   - Completeness is based on the presence of non-missing quantitative values.
+#   - No library() or require() calls are made in this script.
+#   - Completeness is based on the presence of non-missing
+#     Precursor.Quantity values.
 #   - The denominator is the Cartesian space defined by all retained runs and
 #     all retained precursor identifiers.
-#   - Duplicate Run + Precursor.Id rows are collapsed before counting.
+#   - Duplicate Run and Precursor.Id combinations are collapsed before
+#     counting.
+#   - A run–precursor combination is considered observed when at least one
+#     corresponding Precursor.Quantity value is non-missing.
 #   - No dense run-by-precursor matrix is created.
 ###############################################################################
-
 ## 1. Validate identifiers -----------------------------------------------------
 
 completeness_input <- report %>%
