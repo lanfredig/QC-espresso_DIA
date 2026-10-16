@@ -134,7 +134,7 @@ if (length(missing_packages) > 0L) {
 }
 
 arrow::read_parquet(
-  "example-data/dataset_4_contaminans.parquet",
+  "example-data/report.parquet",
   as_data_frame = FALSE
 )
 ```
@@ -212,7 +212,7 @@ The repository includes a validated example dataset:
 source("run_qc.R")
 
 result <- run_qc(
-  report_path = "example-data/dataset_4_contaminans.parquet",
+  report_path = "example-data/report.parquet",
   fasta_path = "example-data/uniprotkb_proteome_UP000005640_AND_revi_2026_05_17.fasta",
   output_root = "output",
   open_report = TRUE
