@@ -40,7 +40,7 @@
 #   - The density plot includes only proteins with positive sequence coverage
 #     and is generated when at least two such proteins are available.
 ###############################################################################
-`
+
 ## 1. Protein sequence coverage helper ----------------------------------------
 
 calculate_coverage <- function(seq, peps) {
