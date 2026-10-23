@@ -8,7 +8,7 @@ A portable Windows executable is available for [download here](https://github.co
 
 ## Requirements
 
-### Scientific and reproducible execution
+### 🔬 Scientific and reproducible execution
 
 - **R 4.6.0**
 - **RStudio** recommended for interactive use
@@ -29,7 +29,7 @@ A portable Windows executable is available for [download here](https://github.co
 
 QC-espresso automatically searches for Quarto in the system `PATH`, common standalone installation directories, recent RStudio installations, and a portable runtime located next to the repository.
 
-### Portable Windows execution
+### ▶ Portable Windows execution
 
 The portable Windows Release includes:
 
