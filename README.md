@@ -424,10 +424,6 @@ The R scripts, Quarto report, automated tests, example data, and reproducible en
 
 The portable Windows Release is intended for routine end-user execution and includes the compiled executable, the required scientific scripts, the Quarto report, and the portable runtime. The executable is an optional Windows interface that calls the same scientific workflow implemented by `run_qc.R`.
 
-## Development status
-
-The `jpr-technical-note` branch contains the validated scientific refactoring, portable executable integration, and end-to-end rendering workflow. Further work should focus on validation from a clean clone, formal regression of exported files, and release preparation.
-
 ## Feedback
 
 Issues and suggestions can be submitted through the repository issue tracker, particularly for:
