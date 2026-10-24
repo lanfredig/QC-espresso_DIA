@@ -47,6 +47,7 @@ completeness_input <- report %>%
   ) %>%
   dplyr::filter(
     !is.na(Run),
+    nzchar(trimws(as.character(Run))),
     !is.na(Precursor.Id),
     nzchar(trimws(as.character(Precursor.Id)))
   )

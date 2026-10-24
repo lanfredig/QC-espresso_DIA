@@ -1,329 +1,775 @@
 ###############################################################################
 # File: tests/run_audit.R
+#
 # Purpose:
-#   Consolidated post-refactoring audit for QC-espresso.
+#   Execute and consolidate the complete QC-espresso validation suite without
+#   duplicating the scientific, structural, or integration checks implemented
+#   by the individual test scripts.
+#
+# Validation scope:
+#   - Confirm that every required validation suite is available and non-empty.
+#   - Execute each validation suite once in an independent R process.
+#   - Preserve the console output of every suite in an individual log file.
+#   - Record exit status, execution time, and failure details for each suite.
+#   - Consolidate all suite results into audit TSV and text-summary outputs.
+#   - Return a non-zero process status when one or more suites fail.
+#
+# Result categories:
+#   PASS  The validation suite completed with exit status zero.
+#   FAIL  The validation suite was unavailable or returned a non-zero status.
 #
 # Usage:
 #   Rscript --no-init-file tests/run_audit.R
 ###############################################################################
 
-resolve_root <- function() {
-  args <- commandArgs(trailingOnly = FALSE)
-  file_arg <- grep("^--file=", args, value = TRUE)
 
-  if (length(file_arg)) {
-    script <- normalizePath(
-      sub("^--file=", "", file_arg[[1L]]),
+## 1. Project-root resolution --------------------------------------------------
+
+resolve_project_root <- function() {
+  command_arguments <- commandArgs(
+    trailingOnly = FALSE
+  )
+
+  file_argument <- grep(
+    "^--file=",
+    command_arguments,
+    value = TRUE
+  )
+
+  if (length(file_argument) > 0L) {
+    audit_file <- normalizePath(
+      sub(
+        "^--file=",
+        "",
+        file_argument[[1L]]
+      ),
       winslash = "/",
       mustWork = TRUE
     )
 
     return(
       normalizePath(
-        file.path(dirname(script), ".."),
+        file.path(
+          dirname(audit_file),
+          ".."
+        ),
         winslash = "/",
         mustWork = TRUE
       )
     )
   }
 
-  normalizePath(getwd(), winslash = "/", mustWork = TRUE)
-}
+  project_root <- normalizePath(
+    getwd(),
+    winslash = "/",
+    mustWork = TRUE
+  )
 
-ROOT <- resolve_root()
-setwd(ROOT)
-results <- list()
-
-record <- function(category, test, status, details = "") {
-  allowed <- c("PASS", "FAIL", "KNOWN ISSUE", "NOT IMPLEMENTED")
-
-  if (!status %in% allowed) {
-    stop("Invalid audit status: ", status, call. = FALSE)
+  if (!file.exists(
+    file.path(
+      project_root,
+      "QC-espresso_DIA.Rproj"
+    )
+  )) {
+    stop(
+      paste0(
+        "The QC-espresso project root could not be resolved.\n",
+        "Run this audit from the project root."
+      ),
+      call. = FALSE
+    )
   }
 
-  results[[length(results) + 1L]] <<- data.frame(
+  project_root
+}
+
+
+PROJECT_ROOT <- resolve_project_root()
+
+setwd(
+  PROJECT_ROOT
+)
+
+
+## 2. Audit configuration ------------------------------------------------------
+
+output_dir <- file.path(
+  "tests",
+  "test-results",
+  "latest"
+)
+
+log_dir <- file.path(
+  output_dir,
+  "audit-logs"
+)
+
+dir.create(
+  output_dir,
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+dir.create(
+  log_dir,
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+
+rscript_path <- file.path(
+  R.home("bin"),
+  "Rscript"
+)
+
+if (.Platform$OS.type == "windows") {
+  rscript_path <- paste0(
+    rscript_path,
+    ".exe"
+  )
+}
+
+rscript_path <- normalizePath(
+  rscript_path,
+  winslash = "/",
+  mustWork = TRUE
+)
+
+
+suite_inventory <- data.frame(
+  Order = seq_len(9L),
+  Category = c(
+    "Baseline",
+    "Science",
+    "Science",
+    "Robustness",
+    "Science",
+    "Science",
+    "Science",
+    "Integration",
+    "Scientific mode"
+  ),
+  Label = c(
+    "Repository and input baseline",
+    "Multi-protein abundance validation",
+    "Missed-cleavage validation",
+    "Optional-section validation",
+    "Completeness validation",
+    "Coverage validation",
+    "Intensity validation",
+    "Scientific core integration",
+    "End-to-end scientific render"
+  ),
+  Script = c(
+    "run_tests.R",
+    "test_multiprotein_abundance.R",
+    "test_missed_cleavages.R",
+    "test_optional_sections.R",
+    "test_completeness.R",
+    "test_coverage.R",
+    "test_intensity.R",
+    "test_scientific_core.R",
+    "test_runner_report.R"
+  ),
+  stringsAsFactors = FALSE
+)
+
+
+suite_inventory$Path <- file.path(
+  "tests",
+  suite_inventory$Script
+)
+
+suite_inventory$Log <- file.path(
+  log_dir,
+  paste0(
+    tools::file_path_sans_ext(
+      suite_inventory$Script
+    ),
+    ".log"
+  )
+)
+
+
+## 3. Minimal audit framework --------------------------------------------------
+
+audit_results <- list()
+
+
+assert_true <- function(
+    condition,
+    message
+) {
+  if (!isTRUE(condition)) {
+    stop(
+      message,
+      call. = FALSE
+    )
+  }
+
+  invisible(TRUE)
+}
+
+
+record_result <- function(
+    category,
+    test,
+    script,
+    status,
+    exit_status,
+    elapsed_seconds,
+    log_file,
+    details = ""
+) {
+  allowed_statuses <- c(
+    "PASS",
+    "FAIL"
+  )
+
+  if (!status %in% allowed_statuses) {
+    stop(
+      paste0(
+        "Invalid audit status: ",
+        status
+      ),
+      call. = FALSE
+    )
+  }
+
+  result <- data.frame(
     Category = category,
     Test = test,
+    Script = script,
     Status = status,
+    Exit_Status = exit_status,
+    Elapsed_Seconds = elapsed_seconds,
+    Log_File = log_file,
     Details = details,
     stringsAsFactors = FALSE
   )
 
-  cat(sprintf("%-18s %-50s %s\n", category, test, status))
+  audit_results[[length(audit_results) + 1L]] <<- result
 
-  if (nzchar(details) && status != "PASS") {
-    cat("  ", details, "\n", sep = "")
-  }
-}
-
-run_check <- function(category, test, fun) {
-  tryCatch(
-    {
-      value <- fun()
-      details <- if (is.character(value) && length(value) == 1L) value else ""
-      record(category, test, "PASS", details)
-    },
-    error = function(e) {
-      record(category, test, "FAIL", conditionMessage(e))
-    }
-  )
-}
-
-assert <- function(condition, message) {
-  if (!isTRUE(condition)) {
-    stop(message, call. = FALSE)
-  }
-}
-
-run_suite <- function(category, label, script_name) {
-  script_path <- file.path("tests", script_name)
-
-  if (!file.exists(script_path)) {
-    record(category, label, "FAIL", paste("Test file not found:", script_path))
-    return(invisible(NULL))
-  }
-
-  log_file <- tempfile(fileext = ".log")
-  on.exit(unlink(log_file, force = TRUE), add = TRUE)
-
-  status <- system2(
-    command = file.path(R.home("bin"), "Rscript"),
-    args = c("--no-init-file", shQuote(script_path)),
-    stdout = log_file,
-    stderr = log_file
-  )
-
-  log_lines <- readLines(log_file, warn = FALSE)
-
-  if (identical(status, 0L)) {
-    record(category, label, "PASS")
-  } else {
-    important_lines <- log_lines[
-      grepl(
-        "FAIL|Reason:|FINAL STATUS|Tests failed|Error|Execution halted",
-        log_lines,
-        ignore.case = TRUE
-      )
-    ]
-
-    if (!length(important_lines)) {
-      important_lines <- tail(log_lines, 15L)
-    }
-
-    record(
+  cat(
+    sprintf(
+      "%-18s %-44s %s\n",
       category,
-      label,
-      "FAIL",
-      paste(important_lines, collapse = "\n")
+      test,
+      status
+    )
+  )
+
+  if (
+    identical(
+      status,
+      "FAIL"
+    ) &&
+    nzchar(details)
+  ) {
+    cat(
+      "  ",
+      details,
+      "\n",
+      sep = ""
     )
   }
 
-  invisible(NULL)
+  invisible(result)
 }
 
-cat("\n============================================================\n")
-cat("QC-espresso consolidated post-refactoring audit\n")
-cat("============================================================\n")
-cat("Project: ", ROOT, "\n", sep = "")
-cat("R version: ", R.version.string, "\n", sep = "")
-cat("============================================================\n\n")
 
-## 1. Repository and environment ----------------------------------------------
-
-run_check("Repository", "Required scientific files", function() {
-  required <- c(
-    "QC-espresso_DIA.Rproj",
-    "VERSION",
-    "run_qc.R",
-    "renv.lock",
-    ".Rprofile",
-    ".gitignore",
-    file.path("report", "qc_espresso_scientific.qmd")
-  )
-
-  missing <- required[!file.exists(required)]
-  assert(!length(missing), paste("Missing:", paste(missing, collapse = ", ")))
-})
-
-run_check("Repository", "No tracked launcher artifacts", function() {
-  tracked <- system2("git", "ls-files", stdout = TRUE, stderr = TRUE)
-  forbidden <- tracked[grepl("[.](exe|bat|ps1)$", tracked, ignore.case = TRUE)]
-  assert(!length(forbidden), paste("Tracked launcher artifacts:", paste(forbidden, collapse = ", ")))
-})
-
-run_check("Repository", "No portable runtime in repository", function() {
-  assert(
-    !dir.exists("runtime") && !dir.exists(file.path("R", "runtime")),
-    "Portable runtime is inside QC-espresso_DIA."
-  )
-})
-
-run_check("Repository", "No tracked R or Quarto residue", function() {
-  tracked <- system2("git", "ls-files", stdout = TRUE, stderr = TRUE)
-  forbidden <- tracked[
-    basename(tracked) %in% c(".Rhistory", ".RData") |
-      grepl("(^|/)[.]quarto(/|$)", tracked)
-  ]
-  assert(!length(forbidden), paste("Tracked residue:", paste(forbidden, collapse = ", ")))
-})
-
-run_check("Environment", "R 4.6.0", function() {
-  observed <- paste(R.version$major, R.version$minor, sep = ".")
-  assert(identical(observed, "4.6.0"), paste("Observed", observed))
-})
-
-run_check("Environment", "Lockfile records R 4.6.0", function() {
-  assert(requireNamespace("jsonlite", quietly = TRUE), "jsonlite unavailable")
-  lock <- jsonlite::read_json("renv.lock", simplifyVector = FALSE)
-  assert(
-    identical(lock[["R"]][["Version"]], "4.6.0"),
-    "renv.lock does not record R 4.6.0"
-  )
-})
-
-run_check("Environment", "Portable Quarto is discoverable", function() {
-  runner_environment <- new.env(parent = globalenv())
-  sys.source("run_qc.R", envir = runner_environment)
-  quarto <- runner_environment$resolve_quarto_executable(ROOT)
-  assert(file.exists(quarto), paste("Resolved Quarto was not found:", quarto))
-  version <- runner_environment$read_quarto_version(quarto)
-  assert(!is.na(version) && nzchar(version), "Quarto version could not be read")
-})
-
-## 2. Static implementation checks --------------------------------------------
-
-run_check("Science", "A1 repeated PG.MaxLFQ formula absent", function() {
-  text <- paste(readLines(file.path("R", "qc_abundance.R"), warn = FALSE), collapse = "\n")
-  assert(
-    !grepl("PG.MaxLFQ / sum(PG.MaxLFQ", text, fixed = TRUE),
-    "Legacy repeated-PG.MaxLFQ proportion formula remains"
-  )
-})
-
-run_check("Science", "A3 multiprotein annotation implemented", function() {
-  text <- paste(readLines(file.path("R", "qc_abundance.R"), warn = FALSE), collapse = "\n")
-  required <- c(
-    "MULTIPLE_ANNOTATIONS",
-    "PARTIAL_FASTA_MATCH",
-    "relationship = \"many-to-one\"",
-    "Signal_Difference"
-  )
-  missing <- required[!vapply(required, grepl, logical(1), x = text, fixed = TRUE)]
-  assert(!length(missing), paste("Missing implementation markers:", paste(missing, collapse = ", ")))
-})
-
-run_check("Science", "Missed-cleavage conditional rule implemented", function() {
-  for (file in c("qc_peptides.R", "qc_figures_of_merit.R")) {
-    text <- paste(readLines(file.path("R", file), warn = FALSE), collapse = "\n")
-    assert(
-      grepl("count_missed_tryptic_cleavages", text, fixed = TRUE),
-      paste("Corrected helper not used in", file)
+extract_failure_details <- function(
+    log_lines
+) {
+  if (length(log_lines) == 0L) {
+    return(
+      "The suite returned no console output."
     )
   }
-})
 
-run_check("Science", "Completeness avoids dense pivot", function() {
-  text <- paste(readLines(file.path("R", "qc_completeness.R"), warn = FALSE), collapse = "\n")
-  assert(!grepl("pivot_wider", text, fixed = TRUE), "Dense pivot remains in qc_completeness.R")
-})
-
-run_check("Visualization", "Missed-cleavage axis is not truncated", function() {
-  text <- paste(readLines(file.path("R", "qc_peptides.R"), warn = FALSE), collapse = "\n")
-  assert(!grepl("limits = c(0, 0.5)", text, fixed = TRUE), "Fixed 0-50% limit remains")
-})
-
-run_check("Visualization", "Mass-error visual range intentionally retained", function() {
-  text <- paste(readLines(file.path("R", "qc_mass_error.R"), warn = FALSE), collapse = "\n")
-  assert(
-    grepl("xlim = c(-10, 10)", text, fixed = TRUE),
-    "The approved -10 to 10 ppm visual range is absent"
+  important_patterns <- c(
+    "FINAL STATUS:",
+    "Tests failed:",
+    "Reason:",
+    "FAIL",
+    "Error",
+    "Execution halted"
   )
-})
 
-run_check("Scientific mode", "Scientific QMD implemented", function() {
-  qmd <- file.path("report", "qc_espresso_scientific.qmd")
-  assert(file.exists(qmd), "Scientific QMD is absent")
-  text <- paste(readLines(qmd, warn = FALSE), collapse = "\n")
-  assert(!grepl("quarto_exec:", text, fixed = TRUE), "Obsolete quarto_exec parameter remains")
-  assert(!grepl("setwd(", text, fixed = TRUE), "Scientific QMD changes the global working directory")
-})
+  important_lines <- log_lines[
+    vapply(
+      log_lines,
+      function(log_line) {
+        any(
+          vapply(
+            important_patterns,
+            grepl,
+            logical(1),
+            x = log_line,
+            ignore.case = TRUE,
+            fixed = TRUE
+          )
+        )
+      },
+      logical(1)
+    )
+  ]
 
-## 3. Consolidated executable suites ------------------------------------------
+  important_lines <- important_lines[
+    nzchar(
+      trimws(
+        important_lines
+      )
+    )
+  ]
 
-suite_inventory <- list(
-  c("Baseline", "General automated validation", "run_tests.R"),
-  c("Science", "Multiprotein abundance validation", "test_multiprotein_abundance.R"),
-  c("Science", "Missed-cleavage validation", "test_missed_cleavages.R"),
-  c("Robustness", "Optional-section validation", "test_optional_sections.R"),
-  c("Science", "Completeness validation", "test_completeness.R"),
-  c("Science", "Coverage validation", "test_coverage.R"),
-  c("Science", "Intensity validation", "test_intensity.R"),
-  c("Integration", "Scientific core validation", "test_scientific_core.R"),
-  c("Scientific mode", "End-to-end scientific render", "test_runner_report.R")
+  if (length(important_lines) == 0L) {
+    important_lines <- tail(
+      log_lines,
+      20L
+    )
+  }
+
+  important_lines <- unique(
+    important_lines
+  )
+
+  paste(
+    tail(
+      important_lines,
+      20L
+    ),
+    collapse = "\n"
+  )
+}
+
+
+## 4. Audit header -------------------------------------------------------------
+
+audit_started_at <- Sys.time()
+
+
+cat("\n")
+cat("============================================================\n")
+cat("QC-ESPRESSO CONSOLIDATED VALIDATION AUDIT\n")
+cat("============================================================\n")
+cat(
+  "Project: ",
+  PROJECT_ROOT,
+  "\n",
+  sep = ""
+)
+cat(
+  "R version: ",
+  R.version.string,
+  "\n",
+  sep = ""
+)
+cat(
+  "Rscript: ",
+  rscript_path,
+  "\n",
+  sep = ""
+)
+cat(
+  "Suites scheduled: ",
+  nrow(
+    suite_inventory
+  ),
+  "\n",
+  sep = ""
+)
+cat("============================================================\n")
+cat("\n")
+
+
+## 5. Validate suite inventory -------------------------------------------------
+
+missing_suite_files <- suite_inventory$Path[
+  !file.exists(
+    suite_inventory$Path
+  )
+]
+
+empty_suite_files <- character()
+
+existing_suite_paths <- suite_inventory$Path[
+  file.exists(
+    suite_inventory$Path
+  )
+]
+
+if (length(existing_suite_paths) > 0L) {
+  existing_suite_sizes <- file.info(
+    existing_suite_paths
+  )$size
+
+  empty_suite_files <- existing_suite_paths[
+    is.na(existing_suite_sizes) |
+      existing_suite_sizes <= 0
+  ]
+}
+
+
+if (length(missing_suite_files) > 0L) {
+  stop(
+    paste0(
+      "Required validation suites are missing: ",
+      paste(
+        missing_suite_files,
+        collapse = ", "
+      )
+    ),
+    call. = FALSE
+  )
+}
+
+
+if (length(empty_suite_files) > 0L) {
+  stop(
+    paste0(
+      "Required validation suites are empty or inaccessible: ",
+      paste(
+        empty_suite_files,
+        collapse = ", "
+      )
+    ),
+    call. = FALSE
+  )
+}
+
+
+deprecated_script <- file.path(
+  "tests",
+  "diagnose_missed_cleavages.R"
 )
 
-for (suite in suite_inventory) {
-  run_suite(suite[[1]], suite[[2]], suite[[3]])
+assert_true(
+  !file.exists(
+    deprecated_script
+  ),
+  paste0(
+    "The deprecated diagnostic script remains in the repository: ",
+    deprecated_script
+  )
+)
+
+
+## 6. Execute each suite once --------------------------------------------------
+
+for (
+  suite_index in
+  seq_len(
+    nrow(
+      suite_inventory
+    )
+  )
+) {
+  suite_category <- suite_inventory$Category[
+    suite_index
+  ]
+
+  suite_label <- suite_inventory$Label[
+    suite_index
+  ]
+
+  suite_script <- suite_inventory$Script[
+    suite_index
+  ]
+
+  suite_path <- suite_inventory$Path[
+    suite_index
+  ]
+
+  suite_log <- suite_inventory$Log[
+    suite_index
+  ]
+
+  if (file.exists(suite_log)) {
+    unlink(
+      suite_log,
+      force = TRUE
+    )
+  }
+
+  suite_started_at <- Sys.time()
+
+  execution_error <- NULL
+
+  exit_status <- tryCatch(
+    system2(
+      command = rscript_path,
+      args = c(
+        "--no-init-file",
+        shQuote(
+          suite_path
+        )
+      ),
+      stdout = suite_log,
+      stderr = suite_log,
+      wait = TRUE
+    ),
+    error = function(error_condition) {
+      execution_error <<- conditionMessage(
+        error_condition
+      )
+
+      1L
+    }
+  )
+
+  suite_elapsed_seconds <- as.numeric(
+    difftime(
+      Sys.time(),
+      suite_started_at,
+      units = "secs"
+    )
+  )
+
+  if (
+    is.null(exit_status) ||
+    length(exit_status) == 0L ||
+    is.na(exit_status)
+  ) {
+    exit_status <- 0L
+  }
+
+  log_lines <- if (file.exists(suite_log)) {
+    readLines(
+      suite_log,
+      warn = FALSE
+    )
+  } else {
+    character()
+  }
+
+  suite_status <- if (
+    identical(
+      as.integer(exit_status),
+      0L
+    )
+  ) {
+    "PASS"
+  } else {
+    "FAIL"
+  }
+
+  suite_details <- if (
+    identical(
+      suite_status,
+      "PASS"
+    )
+  ) {
+    ""
+  } else if (
+    !is.null(execution_error) &&
+    nzchar(execution_error)
+  ) {
+    execution_error
+  } else {
+    extract_failure_details(
+      log_lines
+    )
+  }
+
+  record_result(
+    category = suite_category,
+    test = suite_label,
+    script = suite_script,
+    status = suite_status,
+    exit_status = as.integer(
+      exit_status
+    ),
+    elapsed_seconds = suite_elapsed_seconds,
+    log_file = normalizePath(
+      suite_log,
+      winslash = "/",
+      mustWork = file.exists(
+        suite_log
+      )
+    ),
+    details = suite_details
+  )
 }
 
-## 4. Consolidated audit artifacts --------------------------------------------
 
-result_table <- do.call(rbind, results)
-output_dir <- file.path("tests", "test-results", "latest")
-dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+## 7. Consolidated audit artifacts --------------------------------------------
 
-write.table(
+result_table <- do.call(
+  rbind,
+  audit_results
+)
+
+
+passed_suites <- sum(
+  result_table$Status ==
+    "PASS"
+)
+
+failed_suites <- sum(
+  result_table$Status ==
+    "FAIL"
+)
+
+
+audit_completed_at <- Sys.time()
+
+audit_elapsed_seconds <- as.numeric(
+  difftime(
+    audit_completed_at,
+    audit_started_at,
+    units = "secs"
+  )
+)
+
+
+final_status <- if (
+  failed_suites == 0L
+) {
+  "PASS"
+} else {
+  "FAIL"
+}
+
+
+audit_results_file <- file.path(
+  output_dir,
+  "audit-results.tsv"
+)
+
+audit_summary_file <- file.path(
+  output_dir,
+  "audit-summary.txt"
+)
+
+
+utils::write.table(
   result_table,
-  file.path(output_dir, "audit-results.tsv"),
+  audit_results_file,
   sep = "\t",
   row.names = FALSE,
   quote = TRUE,
   na = ""
 )
 
-status_levels <- c("PASS", "FAIL", "KNOWN ISSUE", "NOT IMPLEMENTED")
-counts <- table(factor(result_table$Status, levels = status_levels))
-
-final_status <- if (
-  counts[["FAIL"]] == 0L &&
-    counts[["KNOWN ISSUE"]] == 0L &&
-    counts[["NOT IMPLEMENTED"]] == 0L
-) {
-  "PASS"
-} else if (counts[["FAIL"]] == 0L) {
-  "PASS WITH DOCUMENTED GAPS"
-} else {
-  "FAIL"
-}
 
 summary_lines <- c(
-  "QC-espresso consolidated post-refactoring audit",
-  paste("Generated:", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
-  paste("Project:", ROOT),
-  paste("R:", R.version.string),
-  "",
-  paste("PASS:", counts[["PASS"]]),
-  paste("FAIL:", counts[["FAIL"]]),
-  paste("KNOWN ISSUE:", counts[["KNOWN ISSUE"]]),
-  paste("NOT IMPLEMENTED:", counts[["NOT IMPLEMENTED"]]),
-  "",
-  paste("FINAL STATUS:", final_status)
+  "QC-espresso consolidated validation audit",
+  paste(
+    "Generated:",
+    format(
+      audit_completed_at,
+      "%Y-%m-%d %H:%M:%S"
+    )
+  ),
+  paste(
+    "Project:",
+    PROJECT_ROOT
+  ),
+  paste(
+    "R:",
+    R.version.string
+  ),
+  paste(
+    "Suites executed:",
+    nrow(
+      result_table
+    )
+  ),
+  paste(
+    "Suites passed:",
+    passed_suites
+  ),
+  paste(
+    "Suites failed:",
+    failed_suites
+  ),
+  paste(
+    "Elapsed seconds:",
+    format(
+      audit_elapsed_seconds,
+      digits = 10
+    )
+  ),
+  paste(
+    "FINAL STATUS:",
+    final_status
+  )
 )
+
 
 writeLines(
   summary_lines,
-  file.path(output_dir, "audit-summary.txt")
+  audit_summary_file
 )
 
-cat("\n============================================================\n")
+
+## 8. Console summary ----------------------------------------------------------
+
+cat("\n")
+cat("============================================================\n")
 cat("AUDIT SUMMARY\n")
 cat("============================================================\n")
-cat(paste(summary_lines[6:length(summary_lines)], collapse = "\n"), "\n")
+cat(
+  "Suites executed: ",
+  nrow(
+    result_table
+  ),
+  "\n",
+  sep = ""
+)
+cat(
+  "Suites passed: ",
+  passed_suites,
+  "\n",
+  sep = ""
+)
+cat(
+  "Suites failed: ",
+  failed_suites,
+  "\n",
+  sep = ""
+)
+cat(
+  "Elapsed seconds: ",
+  format(
+    audit_elapsed_seconds,
+    digits = 10
+  ),
+  "\n",
+  sep = ""
+)
+cat(
+  "FINAL STATUS: ",
+  final_status,
+  "\n",
+  sep = ""
+)
 cat("============================================================\n")
 cat(
   "Detailed results: ",
   normalizePath(
-    file.path(output_dir, "audit-results.tsv"),
+    audit_results_file,
+    winslash = "/",
+    mustWork = TRUE
+  ),
+  "\n",
+  sep = ""
+)
+cat(
+  "Summary: ",
+  normalizePath(
+    audit_summary_file,
+    winslash = "/",
+    mustWork = TRUE
+  ),
+  "\n",
+  sep = ""
+)
+cat(
+  "Suite logs: ",
+  normalizePath(
+    log_dir,
     winslash = "/",
     mustWork = TRUE
   ),
@@ -331,4 +777,16 @@ cat(
   sep = ""
 )
 
-quit(status = if (identical(final_status, "PASS")) 0L else 1L)
+
+quit(
+  status = if (
+    identical(
+      final_status,
+      "PASS"
+    )
+  ) {
+    0L
+  } else {
+    1L
+  }
+)

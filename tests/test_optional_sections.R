@@ -2,20 +2,29 @@
 # File: tests/test_optional_sections.R
 #
 # Purpose:
-#   Characterize the current behavior of QC-espresso modules when optional
-#   data are absent, incomplete, encoded as zero, or insufficient for fitting.
+#   Characterize the behavior of QC-espresso modules when optional data are
+#   absent, incomplete, encoded as zero, or insufficient for plotting.
 #
-# Status categories:
-#   PASS                     Expected behavior was observed.
-#   OPTIONAL SECTION SKIPPED Optional data were unavailable and the module
-#                            skipped the corresponding output without failing.
-#   REQUIRED COLUMN ERROR    A mandatory column was absent and the module
-#                            stopped, as expected for the current architecture.
-#   BEHAVIOR TO CORRECT      The current behavior is not robust enough for the
-#                            scientific execution mode.
-#   FAIL                     An unexpected result occurred in the test itself.
+# Validation scope:
+#   - Validate controlled omission of internal-standard outputs.
+#   - Validate ion-mobility behavior when columns or valid values are absent.
+#   - Validate chromatography behavior with missing values or required columns.
+#   - Validate mass-error behavior with unavailable quantitative observations.
+#   - Validate DIA-NN quality metrics with missing values or required columns.
+#   - Distinguish optional-section skips, expected required-column errors,
+#     behavior requiring correction, and unexpected failures.
 #
-# Usage from the project root:
+# Result categories:
+#   PASS                      The expected behavior was observed.
+#   OPTIONAL SECTION SKIPPED  Optional data were unavailable and the module
+#                             skipped the corresponding output without failing.
+#   REQUIRED COLUMN ERROR     A mandatory column was absent and the module
+#                             stopped, as expected for the current architecture.
+#   BEHAVIOR TO CORRECT       The current behavior is not robust enough for the
+#                             scientific execution mode.
+#   FAIL                      An unexpected result occurred in the test itself.
+#
+# Usage:
 #   Rscript --no-init-file tests/test_optional_sections.R
 ###############################################################################
 
@@ -24,11 +33,12 @@
 
 results <- list()
 
+
 record_result <- function(
-  category,
-  scenario,
-  status,
-  details = ""
+    category,
+    scenario,
+    status,
+    details = ""
 ) {
   allowed_status <- c(
     "PASS",
@@ -81,9 +91,9 @@ record_result <- function(
 
 
 run_scenario <- function(
-  category,
-  scenario,
-  test_function
+    category,
+    scenario,
+    test_function
 ) {
   tryCatch(
     test_function(),
@@ -100,8 +110,8 @@ run_scenario <- function(
 
 
 assert_true <- function(
-  condition,
-  message
+    condition,
+    message
 ) {
   if (!isTRUE(condition)) {
     stop(
@@ -196,8 +206,8 @@ suppressPackageStartupMessages(
 ## 4. Isolated module execution ------------------------------------------------
 
 source_module <- function(
-  module_name,
-  objects
+    module_name,
+    objects
 ) {
   module_path <- file.path(
     PROJECT_ROOT,
@@ -290,8 +300,8 @@ source_module <- function(
 
 
 object_exists <- function(
-  execution_result,
-  object_name
+    execution_result,
+    object_name
 ) {
   exists(
     object_name,
@@ -302,8 +312,8 @@ object_exists <- function(
 
 
 error_mentions <- function(
-  execution_result,
-  expected_text
+    execution_result,
+    expected_text
 ) {
   !is.null(execution_result$error) &&
     grepl(
@@ -315,8 +325,8 @@ error_mentions <- function(
 
 
 message_mentions <- function(
-  execution_result,
-  expected_text
+    execution_result,
+    expected_text
 ) {
   any(
     grepl(
@@ -341,14 +351,17 @@ base_runs <- factor(
   )
 )
 
+
 file_palette <- c(
   Run01 = "#0072B2",
   Run02 = "#E69F00"
 )
 
+
 legend_color <- function() {
   ggplot2::theme()
 }
+
 
 PANELS_PER_ROW <- 3L
 AR_DENSITY <- 1
@@ -919,9 +932,18 @@ run_scenario(
   function() {
     report <- tibble::tibble(
       Run = base_runs,
-      RT = c(1, 2),
-      RT.Start = c(0.9, 1.9),
-      RT.Stop = c(1.1, 2.1)
+      RT = c(
+        1,
+        2
+      ),
+      RT.Start = c(
+        0.9,
+        1.9
+      ),
+      RT.Stop = c(
+        1.1,
+        2.1
+      )
     )
 
     result <- source_module(
@@ -953,9 +975,18 @@ run_scenario(
   function() {
     report <- tibble::tibble(
       Run = base_runs,
-      RT = c(1, 2),
-      FWHM = c(0.1, 0.1),
-      RT.Stop = c(1.1, 2.1)
+      RT = c(
+        1,
+        2
+      ),
+      FWHM = c(
+        0.1,
+        0.1
+      ),
+      RT.Stop = c(
+        1.1,
+        2.1
+      )
     )
 
     result <- source_module(
@@ -987,9 +1018,18 @@ run_scenario(
   function() {
     report <- tibble::tibble(
       Run = base_runs,
-      RT = c(1, 2),
-      FWHM = c(0.1, 0.1),
-      RT.Start = c(0.9, 1.9)
+      RT = c(
+        1,
+        2
+      ),
+      FWHM = c(
+        0.1,
+        0.1
+      ),
+      RT.Start = c(
+        0.9,
+        1.9
+      )
     )
 
     result <- source_module(
@@ -1021,10 +1061,22 @@ run_scenario(
   function() {
     report <- tibble::tibble(
       Run = base_runs,
-      RT = c(NA_real_, NA_real_),
-      FWHM = c(NA_real_, NA_real_),
-      RT.Start = c(NA_real_, NA_real_),
-      RT.Stop = c(NA_real_, NA_real_)
+      RT = c(
+        NA_real_,
+        NA_real_
+      ),
+      FWHM = c(
+        NA_real_,
+        NA_real_
+      ),
+      RT.Start = c(
+        NA_real_,
+        NA_real_
+      ),
+      RT.Stop = c(
+        NA_real_,
+        NA_real_
+      )
     )
 
     result <- source_module(
@@ -1059,7 +1111,10 @@ run_scenario(
       length(missing_messages) == 0L,
       paste0(
         "Missing controlled skip message(s): ",
-        paste(missing_messages, collapse = ", ")
+        paste(
+          missing_messages,
+          collapse = ", "
+        )
       )
     )
 
@@ -1149,9 +1204,18 @@ run_scenario(
   function() {
     report <- tibble::tibble(
       Run = base_runs,
-      Precursor.Mz = c(500, 600),
-      Precursor.Quantity = c(0, NA_real_),
-      Ms1.Apex.Mz.Delta = c(0.001, 0.001)
+      Precursor.Mz = c(
+        500,
+        600
+      ),
+      Precursor.Quantity = c(
+        0,
+        NA_real_
+      ),
+      Ms1.Apex.Mz.Delta = c(
+        0.001,
+        0.001
+      )
     )
 
     result <- source_module(
@@ -1196,8 +1260,14 @@ run_scenario(
   function() {
     report <- tibble::tibble(
       Run = base_runs,
-      Precursor.Mz = c(500, 600),
-      Precursor.Quantity = c(100, 100)
+      Precursor.Mz = c(
+        500,
+        600
+      ),
+      Precursor.Quantity = c(
+        100,
+        100
+      )
     )
 
     result <- source_module(
@@ -1237,20 +1307,38 @@ run_scenario(
         levels = levels(base_runs)
       ),
       Quantity.Quality = rep(
-        seq(0.1, 0.95, length.out = 12),
+        seq(
+          0.1,
+          0.95,
+          length.out = 12
+        ),
         times = 2
       ),
       Empirical.Quality = rep(
-        seq(0.15, 0.98, length.out = 12),
+        seq(
+          0.15,
+          0.98,
+          length.out = 12
+        ),
         times = 2
       ),
       Protein.Group = rep(
-        paste0("P", seq_len(6)),
+        paste0(
+          "P",
+          seq_len(6)
+        ),
         times = 4
       ),
-      Precursor.Id = paste0("PREC", seq_len(24)),
+      Precursor.Id = paste0(
+        "PREC",
+        seq_len(24)
+      ),
       PG.MaxLFQ.Quality = rep(
-        seq(0.4, 0.95, length.out = 12),
+        seq(
+          0.4,
+          0.95,
+          length.out = 12
+        ),
         times = 2
       )
     )
@@ -1291,11 +1379,26 @@ run_scenario(
   function() {
     report <- tibble::tibble(
       Run = base_runs,
-      Quantity.Quality = c(NA_real_, NA_real_),
-      Empirical.Quality = c(NA_real_, NA_real_),
-      Protein.Group = c("P1", "P2"),
-      Precursor.Id = c("PREC1", "PREC2"),
-      PG.MaxLFQ.Quality = c(NA_real_, NA_real_)
+      Quantity.Quality = c(
+        NA_real_,
+        NA_real_
+      ),
+      Empirical.Quality = c(
+        NA_real_,
+        NA_real_
+      ),
+      Protein.Group = c(
+        "P1",
+        "P2"
+      ),
+      Precursor.Id = c(
+        "PREC1",
+        "PREC2"
+      ),
+      PG.MaxLFQ.Quality = c(
+        NA_real_,
+        NA_real_
+      )
     )
 
     result <- source_module(
@@ -1331,7 +1434,10 @@ run_scenario(
       length(missing_messages) == 0L,
       paste0(
         "Missing controlled skip message(s): ",
-        paste(missing_messages, collapse = ", ")
+        paste(
+          missing_messages,
+          collapse = ", "
+        )
       )
     )
 
@@ -1357,10 +1463,22 @@ run_scenario(
   function() {
     report <- tibble::tibble(
       Run = base_runs,
-      Quantity.Quality = c(0.5, 0.6),
-      Protein.Group = c("P1", "P2"),
-      Precursor.Id = c("PREC1", "PREC2"),
-      PG.MaxLFQ.Quality = c(0.7, 0.8)
+      Quantity.Quality = c(
+        0.5,
+        0.6
+      ),
+      Protein.Group = c(
+        "P1",
+        "P2"
+      ),
+      Precursor.Id = c(
+        "PREC1",
+        "PREC2"
+      ),
+      PG.MaxLFQ.Quality = c(
+        0.7,
+        0.8
+      )
     )
 
     result <- source_module(
@@ -1419,6 +1537,7 @@ utils::write.table(
   na = ""
 )
 
+
 status_levels <- c(
   "PASS",
   "OPTIONAL SECTION SKIPPED",
@@ -1445,6 +1564,7 @@ behavior_gaps <- unname(
     "BEHAVIOR TO CORRECT"
   ]
 )
+
 
 cat("\n")
 cat("============================================================\n")
@@ -1494,6 +1614,7 @@ cat(
   "\n",
   sep = ""
 )
+
 
 quit(
   status = if (unexpected_failures == 0L) {

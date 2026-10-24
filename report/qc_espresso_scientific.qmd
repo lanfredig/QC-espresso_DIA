@@ -141,12 +141,12 @@ if (
 
 ::: {.callout-note collapse="true"}
 ## Identification depth
-
-This section reports **identification depth per run** at the **precursor**, **peptide**, and **protein‑group** levels.
-
-These levels capture complementary aspects of identification performance: precursor counts reflect charge‑ and modification‑specific signals, peptides provide a more stable sequence‑level view, and protein groups summarize identification at the inference level used for downstream analyses.
-
-Horizontal reference lines indicate the **global average** (dotted) and **global maximum** (solid) identification depth observed across runs for each level. Runs deviating from these references may reflect technical variation and should be interpreted together with chromatographic, intensity, and completeness QC metrics.
+<br>
+This section reports **identification depth per run** at the **precursor**, **modified peptide sequence**, and **protein‑group** levels.
+<br>
+These levels capture complementary aspects of identification performance: precursor counts distinguish charge‑ and modification‑specific precursor forms, modified peptide sequences retain sequence and modification information, and protein groups summarize identification at the inference level used for downstream analyses.
+<br>
+Horizontal reference lines indicate the **mean identification count across runs** (blue dotted), the **maximum identification count observed in a single run** (red dotted), and the **total number of distinct identifiers across the complete filtered dataset** (purple solid) for each level. The dataset-wide total counts each identifier only once, even when it occurs in multiple runs. These descriptive references should be interpreted together with chromatographic, intensity, and completeness QC metrics.
 :::
 
 ```{r}
@@ -194,12 +194,12 @@ id_depth_summary |>
 
 ::: {.callout-note collapse="true"}
 ## Relative abundance and contaminant contribution
-
-This section summarizes the **relative distribution of protein‑level signal across runs**, including the fraction attributed to protein groups annotated as contaminants.
-
-Relative abundance profiles provide a concise assessment of sample composition and quantitative balance between runs. Consistent patterns indicate stable sample preparation and instrument response, whereas pronounced shifts may reflect differences in sample loading, background contamination, or overall signal balance.
-
-Contaminant-specific plots highlight signal originating from common background proteins (e.g. keratins, proteolytic enzymes, laboratory contaminants). Elevated or variable contaminant contributions can affect identification depth and quantitative robustness.
+<br>
+This section summarizes the **relative composition of protein-group signal within each run**, calculated by summing positive `Precursor.Quantity` values for each original `Protein.Group`. FASTA-derived gene or accession labels are used for visualization without redistributing quantitative signal among individual accessions. The ten annotation labels with the highest total signal across the filtered dataset are displayed individually, while the remaining labels are grouped as **Others**.
+<br>
+Relative signal-composition profiles provide a concise assessment of sample composition and quantitative balance between runs. Consistent patterns may indicate stable sample preparation and instrument response, whereas pronounced shifts may reflect differences in sample loading, sample composition, preparation, acquisition, background contamination, or overall signal balance.
+<br>
+When protein groups containing recognized `CON_` or `cRAP-` accession prefixes and positive quantitative signal are available, an additional plot highlights signal associated with annotated contaminants, which may include keratins, proteolytic enzymes, and other common laboratory contaminants. The plot shows the **relative composition of contaminant signal within each run**, while the accompanying label reports the fraction of total run signal assigned to these recognized contaminants. If the recognized prefixes or positive contaminant signal are unavailable, the contaminant plot is omitted and an explanatory notice is displayed.
 :::
 
 ```{r}
@@ -215,12 +215,12 @@ invisible(source(file.path(PROJECT_ROOT, "R", "qc_abundance.R")))
 
 ::: {.callout-note collapse="true"}
 ## Protein sequence coverage
-
-This section summarizes **protein sequence coverage** based on the mapping of identified peptides to reference protein sequences.
-
-Coverage reflects the fraction of amino acid positions supported by at least one peptide. The summary table reports the **top 100 proteins** ranked by sequence coverage, while the density plot provides a global overview of coverage distribution across the proteome.
-
-The complete coverage table, including peptide evidence for all proteins, is exported as a CSV file for reference and downstream inspection. Sequence coverage complements identification depth by describing how extensively individual protein sequences are sampled rather than how many proteins are detected.
+<br>
+This section summarizes **protein sequence coverage** based on exact matching of identified peptides to reference protein sequences.
+<br>
+Coverage reflects the fraction of amino acid positions supported by at least one mapped peptide. All occurrences of each unique peptide are considered, while overlapping peptide mappings do not result in duplicate counting of covered residues. The summary table reports the **top 100 reference proteins** ranked by sequence coverage, while the density plot provides an overview of the coverage distribution among proteins with positive sequence coverage.
+<br>
+The exported CSV file includes proteins with at least one covered amino acid position, together with their mapped peptide evidence. Proteins without mapped peptide evidence remain represented in the complete in-memory coverage table but are not included in the exported CSV. Sequence coverage complements identification depth by describing how extensively individual reference protein sequences are sampled rather than how many proteins are detected.
 :::
 
 ```{r}
@@ -243,7 +243,7 @@ if (
     gt::gt() |>
     gt::tab_header(
       title = "Protein Sequence Coverage Summary (Top 100)",
-      subtitle = "Full peptide evidence is exported as CSV"
+      subtitle = "Mapped peptide evidence for covered proteins is exported as CSV"
     ) |>
     gt::cols_label(
       Protein.Group = "Accession",
@@ -273,12 +273,12 @@ if (
 
 ::: {.callout-note collapse="true"}
 ## Peptide‑level metrics
-
-This section summarizes **peptide‑level quality metrics** derived from identified peptides, including precursor **charge‑state distribution**, **peptide length**, and **missed tryptic cleavages**.
-
-Charge‑state distributions reflect precursor ionization behavior and chemistry, while peptide length distributions summarize digestion outcome and peptide detectability. Digestion efficiency is assessed through the fraction of peptides containing at least one missed tryptic cleavage.
-
-Together, these metrics provide complementary information to identification counts by capturing changes in peptide chemistry and digestion performance that may not be evident at the protein level.
+<br>
+This section summarizes **peptide‑level quality metrics** across runs, including precursor **charge‑state distribution**, **peptide length**, and **missed tryptic cleavages**.
+<br>
+Charge‑state distributions are calculated from distinct combinations of run, precursor identifier, and precursor charge. Peptide length and missed‑cleavage metrics are calculated from distinct stripped peptide sequences within each run. Peptide length distributions include the median length per run, while digestion efficiency is assessed through the fraction of unique stripped peptide sequences containing at least one missed tryptic cleavage.
+<br>
+A missed cleavage is assigned when an internal lysine or arginine is not followed by proline, while a terminal lysine or arginine is not counted as a missed cleavage. Together, these metrics provide complementary information to identification counts by capturing variation in precursor charge, peptide length, and digestion performance that may not be evident at the protein‑group level.
 :::
 
 ```{r}
@@ -293,12 +293,12 @@ invisible(source(file.path(PROJECT_ROOT, "R", "qc_peptides.R")))
 
 ::: {.callout-note collapse="true"}
 ## Chromatography quality
-
-This section evaluates **chromatographic performance and retention‑time behavior** across runs using peptide identification density, peak width metrics, and internal standard monitoring.
-
-Identification density over retention time summarizes how peptide identifications are distributed across the LC gradient, providing an overview of gradient utilization and stability. Peak width metrics, including **full width at half maximum (FWHM)** and **peak base width**, characterize chromatographic peak shape and separation efficiency.
-
-Retention‑time reproducibility and quantitative stability of **trypsin autolysis peptides** are assessed as internal standards, providing an instrument‑ and workflow‑level reference independent of biological variation. Together, these plots highlight changes in chromatographic performance such as gradient drift, peak broadening, or reduced run‑to‑run stability.
+<br>
+This section evaluates **chromatographic performance and retention‑time behavior** across runs using the distribution of retained DIA‑NN report entries over retention time, peak width metrics, and monitoring of trypsin autolysis precursors.
+<br>
+The distribution of retained report entries over retention time summarizes how quantitative precursor-level observations are distributed across the LC gradient, providing an overview of gradient utilization and run‑to‑run stability. Peak width metrics, including **full width at half maximum (FWHM)** and **peak base width**, are reported in seconds and characterize chromatographic peak width and separation performance. Median FWHM and peak base width values are indicated for each run.
+<br>
+Retention‑time reproducibility and quantitative signal stability are additionally assessed for three predefined **trypsin autolysis precursors**, which serve as internal process references for digestion, chromatography, and acquisition performance. These measurements may still be influenced by sample preparation, digestion efficiency, matrix composition, and signal availability. Together, the plots can reveal patterns consistent with gradient drift, peak broadening, altered chromatographic separation, or reduced run‑to‑run stability.
 :::
 
 ```{r}
@@ -321,12 +321,12 @@ invisible(source(file.path(PROJECT_ROOT, "R", "qc_chromatography_internalstd.R")
 
 ::: {.callout-note collapse="true"}
 ## Mass accuracy
-
-This section summarizes **precursor mass measurement error (m/z delta)** across runs to assess systematic bias and stability over the m/z range.
-
-Mass error is defined as the deviation between measured and theoretical precursor m/z values. Instead of full distributions, the per‑run profiles display the **median mass deviation across the m/z range**, providing a robust representation of systematic trends while reducing the influence of outliers.
-
-Stable mass accuracy is characterized by median deviations consistently centered around zero across the m/z range. Systematic trends (e.g., increasing or decreasing bias with m/z) indicate potential calibration issues or mass‑dependent inaccuracies, while increased spread or irregular profiles suggest reduced measurement stability.
+<br>
+This section summarizes **precursor mass measurement error** across runs to assess systematic bias, distributional spread, and stability over the precursor m/z range.
+<br>
+Mass error is calculated in parts per million (ppm) from `Ms1.Apex.Mz.Delta` relative to `Precursor.Mz`, using observations with positive `Precursor.Quantity` and positive precursor m/z. Per‑run histograms show the mass‑error distribution within a visual range of −10 to 10 ppm, with reference lines indicating zero error and the median error for each run. A complementary profile displays the **median mass error across 50 precursor m/z bins**, providing a robust representation of mass‑dependent trends.
+<br>
+Stable mass accuracy is characterized by distributions and binned median profiles consistently centered around zero. Systematic increases or decreases in median error across the m/z range may indicate calibration drift or mass‑dependent inaccuracies, while broader distributions or irregular profiles may indicate reduced measurement stability. These patterns should be interpreted as QC indicators rather than automatic diagnostic criteria.
 :::
 
 ```{r}
@@ -341,16 +341,15 @@ invisible(source(file.path(PROJECT_ROOT, "R", "qc_mass_error.R")))
 
 ::: {.callout-note collapse="true"}
 ## DIA-NN quantification quality
-
-This section summarizes DIA‑NN quantification quality metrics at the precursor and protein‑group levels, providing an integrated view of signal reliability and consistency across runs.
-
+<br>
+This section summarizes DIA‑NN quantification quality metrics at the precursor and protein‑group levels, providing complementary views of quantitative quality across runs.
+<br>
 \
-**Quantity.Quality** reflects precursor‑level signal cleanness and sensitivity to interference, with higher values indicating more reliable extraction.\
-**Empirical.Quality** captures cross‑run consistency of precursor behavior, summarizing agreement in quantitative features across the experiment.\
-**PG.MaxLFQ.Quality** reflects the stability of protein‑group quantification after MaxLFQ aggregation.
-
+**Quantity.Quality** and **Empirical.Quality** are evaluated jointly at the precursor level.\
+**PG.MaxLFQ.Quality** is evaluated at the protein‑group level in relation to the number of distinct precursors supporting each protein group.
+<br>
 \
-The visualizations include per‑run quality distributions, a joint precursor reliability space, and protein‑level consistency versus precursor support. Dashed reference lines indicate QC regimescommonly adopted in DIA‑NN quality control workflows(Quantity.Quality ≈ 0.5, Empirical.Quality ≈ 0.5, PG.MaxLFQ.Quality ≈ 0.7), aiding identification of noisy precursors, unstable runs, and unreliable protein‑level quantification.
+The precursor‑level visualization shows the joint distribution of **Quantity.Quality** and **Empirical.Quality** within each run using two‑dimensional bins, with dashed reference lines at 0.5 for both metrics. The protein‑group visualization relates **PG.MaxLFQ.Quality** to the number of distinct supporting precursors on a logarithmic scale, with dashed reference lines at 0.5 and 0.7. These lines are visual references rather than universal acceptance thresholds and support comparison of quality‑metric patterns across runs.
 :::
 
 ```{r}
@@ -365,12 +364,12 @@ invisible(source(file.path(PROJECT_ROOT, "R", "qc_diann_quality_metrics.R")))
 
 ::: {.callout-note collapse="true"}
 ## Intensity and LFQ distribution
-
-This section summarizes **quantitative signal intensity distributions** at both the **precursor level (raw signal)** and the **protein level after LFQ normalization**.
-
-Density plots depict the distribution of raw precursor intensities across runs, providing an overview of signal range and abundance prior to protein-level aggregation. Boxplots summarize LFQ‑normalized protein intensities, highlighting the spread and consistency of quantitative signal across runs.
-
-Stable intensity profiles indicate consistent instrument response and effective normalization, whereas pronounced shifts or increased dispersion may reflect differences in signal loading or normalization performance.
+<br>
+This section summarizes **quantitative signal distributions** at the **precursor level** and the **protein‑group level after LFQ normalization**.
+<br>
+Density plots show the distribution of positive, finite `Precursor.Quantity` values across runs on a logarithmic scale, providing an overview of precursor signal range and abundance before protein‑group aggregation. Boxplots summarize positive, finite `PG.MaxLFQ` values, using one value per run and protein group, and show the spread and central tendency of LFQ‑normalized protein‑group signal across runs.
+<br>
+Similar intensity profiles across runs may be consistent with comparable signal loading and quantitative behavior, whereas pronounced shifts or increased dispersion may reflect differences in sample loading, acquisition response, sample composition, or LFQ‑normalized signal distributions. These plots support run‑to‑run comparison but should not be interpreted alone as evidence of normalization performance.
 :::
 
 ```{r}
@@ -385,12 +384,12 @@ invisible(source(file.path(PROJECT_ROOT, "R", "qc_intensity.R")))
 
 ::: {.callout-note collapse="true"}
 ## Data completeness
-
-This section reports **precursor‑level data completeness**, defined as the presence or absence of quantitative signal in the run × precursor matrix.
-
-Global completeness summarizes the fraction of all possible run–precursor values that are observed across the dataset, while run‑level completeness metrics describe the proportion of precursors detected in each individual run.
-
-These summaries characterize the consistency of precursor detection across runs and provide context for downstream quantitative analyses by highlighting missing values at the precursor level.
+<br>
+This section reports **precursor‑level data completeness**, defined by the availability of `Precursor.Quantity` values across all valid run–precursor combinations.
+<br>
+Global completeness represents the fraction of the complete run × precursor space for which at least one non-missing quantitative value is available. Duplicate entries for the same run and precursor are collapsed before counting, and a combination is considered observed when at least one corresponding `Precursor.Quantity` value is not missing. Run‑level completeness describes the proportion of all valid precursor identifiers with an observed quantitative value in each individual run.
+<br>
+These summaries characterize the availability and consistency of precursor‑level quantitative data across runs and provide context for downstream analyses by highlighting missing values. The run × precursor space is evaluated in long format without materializing a dense quantitative matrix.
 :::
 
 ```{r}
@@ -434,10 +433,10 @@ completeness_per_run_df |>
 
 ::: {.callout-note collapse="true"}
 ## Figures of Merit
-
-This section summarizes key run-level quality control metrics in a single table, providing an integrated overview of identification depth, chromatographic performance, retention-time reproducibility, mass accuracy, peptide characteristics, and contaminant contribution.
-
-The table is intended as a compact QC dashboard for run-to-run comparison and longitudinal instrument monitoring. A complete per-run summary is also exported as a CSV file in the Results directory for downstream tracking and trend analysis.
+<br>
+This section summarizes key **run-level quality control metrics** in a single table, providing an integrated overview of identification depth, chromatographic performance, retention-time reproducibility, mass accuracy, peptide characteristics, precursor charge states, and contaminant contribution.
+<br>
+The table supports run-to-run comparison and longitudinal instrument monitoring by bringing together complementary indicators of analytical performance. A complete per-run summary is also exported as a CSV file in the Results directory for downstream tracking and trend analysis.
 :::
 
 ```{r}
@@ -519,10 +518,10 @@ if (isTRUE(HAS_VALID_ION_MOBILITY)) {
   cat("# 11. Ion mobility\n\n")
   cat("::: {.callout-note collapse=\"true\"}\n")
   cat("## Ion mobility\n\n")
-  cat("This section evaluates **ion mobility performance across runs** using the **m/z–ion mobility separation space** and a comparison of **observed vs predicted mobility trends**.\n\n")
-  cat("Density plots show how precursors populate the separation space, reflecting stability and consistency of ion mobility behavior.\n\n")
-  cat("Trend comparison plots quantify agreement between observed and predicted mobility using **linear slopes and R²**, providing a compact assessment of calibration and consistency.\n\n")
-  cat("Stable performance is characterized by consistent density structure, similar slopes, and high agreement between observed and predicted trends. Deviations may indicate calibration drift or reduced separation quality.\n")
+  cat("This section evaluates **ion mobility patterns across runs** using the **precursor m/z–ion mobility separation space** and, when DIA-NN `iIM` values are available, a comparison of observed and predicted mobility trends.\n\n")
+  cat("Two-dimensional binned plots show how precursor observations are distributed across the m/z–ion mobility space, supporting comparison of separation patterns between runs.\n\n")
+  cat("For runs with sufficient complete and variable observations, separate linear trends of observed ion mobility and DIA-NN `iIM` across precursor m/z are displayed. The annotations report the slope and intercept of each trend and the squared Pearson correlation between observed ion mobility and `iIM`.\n\n")
+  cat("Consistent separation patterns, similar observed and predicted trends, and strong agreement between observed ion mobility and `iIM` may indicate stable ion mobility behavior. Deviations may reflect calibration changes or reduced separation consistency and should be interpreted together with the other QC metrics.\n")
   cat(":::\n")
 }
 ```
