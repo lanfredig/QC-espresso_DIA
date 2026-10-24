@@ -1,0 +1,631 @@
+QC-espresso - DIA
+CHANGELOG
+
+============================================================
+Version v1.3.1
+============================================================
+
+Focus: Validation hardening, documentation alignment, and portable release consolidation
+
+This version consolidates the current scientific workflow for
+repository-based and portable Windows execution. The scientific
+modules, Quarto report, example inputs, documentation, and validation
+architecture were aligned and tested as a unified release.
+
+Previously introduced QC categories are not treated as new features
+in this version. The emphasis is placed on execution robustness,
+scientific consistency, reproducible validation, and release
+preparation.
+
+
+Robustness
+----------
+
+- Improved precursor-level completeness assessment by excluding
+  missing, blank, and whitespace-only run identifiers.
+
+- Confirmed that duplicate run-precursor observations are collapsed
+  before completeness is calculated.
+
+- Validated the annotation of single- and multi-protein groups without
+  duplicating or redistributing quantitative signal across individual
+  accessions.
+
+- Added explicit consistency checks for multiple distinct positive
+  PG.MaxLFQ values within the same run and protein group.
+
+- Standardized controlled behavior for optional sections when required
+  fields or valid observations are absent or insufficient for plotting.
+
+- Clarified and validated that the protein coverage CSV contains
+  proteins with mapped peptide evidence and at least one covered amino
+  acid position.
+
+- Confirmed that proteins without mapped peptide evidence remain
+  represented in the complete in-memory coverage table.
+
+- Updated the validation suites to use the current example DIA-NN
+  report stored as example-data/report.parquet.
+
+
+Validation
+----------
+
+- Reorganized the automated validation architecture around
+  tests/run_audit.R as the single consolidated audit orchestrator.
+
+- Ensured that every validation suite is executed exactly once during
+  the consolidated audit.
+
+- Separated focused scientific tests, scientific-core integration
+  testing, and end-to-end report validation.
+
+- Removed the internal execution of focused test suites from
+  test_scientific_core.R.
+
+- Replaced dataset-specific acceptance criteria with dynamic
+  scientific and structural invariants where appropriate.
+
+- Retained dataset-derived counts only as diagnostic information when
+  they are not universal scientific requirements.
+
+- Expanded controlled tests for completeness, sequence coverage,
+  intensity distributions, multi-protein abundance, missed tryptic
+  cleavages, and optional report sections.
+
+- Added controlled tests for missing, blank, duplicated, non-positive,
+  and non-finite values where relevant to the corresponding module.
+
+- Consolidated missed-cleavage diagnostic functions and outputs into
+  test_missed_cleavages.R.
+
+- Removed the deprecated standalone
+  tests/diagnose_missed_cleavages.R script.
+
+- Preserved test_runner_report.R as the end-to-end scientific rendering
+  test.
+
+- Preserved focused validation suites for completeness, coverage,
+  intensity, multi-protein abundance, missed cleavages, and optional
+  report sections.
+
+- Validated all nine consolidated test suites successfully against the
+  current example DIA-NN report and FASTA reference.
+
+
+Scientific Report
+-----------------
+
+- Revised the scientific descriptions in the Quarto report to match the
+  calculations, filters, tables, and visualizations implemented by the
+  corresponding R modules.
+
+- Clarified that identification depth is calculated from distinct
+  precursor identifiers, modified peptide sequences, and protein
+  groups within each retained run.
+
+- Corrected the descriptions of the mean per-run count, maximum
+  per-run count, and dataset-wide total reference lines in the
+  identification plots.
+
+- Clarified that protein-group signal composition is calculated by
+  summing positive Precursor.Quantity values while preserving the
+  original DIA-NN Protein.Group assignment.
+
+- Clarified the role of FASTA-derived gene and accession labels in
+  protein-group visualization.
+
+- Clarified contaminant recognition based on CON_ and cRAP- accession
+  prefixes and distinguished contaminant composition from the
+  contaminant fraction of total run signal.
+
+- Updated the protein sequence coverage description to document exact
+  peptide-to-sequence matching, repeated peptide occurrences, and
+  non-duplicated counting of overlapping covered residues.
+
+- Corrected the description of the protein coverage CSV export to
+  reflect that only proteins with mapped peptide evidence and positive
+  sequence coverage are exported.
+
+- Clarified the use of distinct precursor and stripped peptide
+  sequences in charge-state, peptide-length, and missed-cleavage
+  calculations.
+
+- Updated the chromatography description to distinguish retained
+  DIA-NN report entries from unique peptide identifications.
+
+- Clarified the units and interpretation of FWHM and peak base width
+  metrics.
+
+- Reframed trypsin autolysis precursors as internal process references
+  whose behavior may still be influenced by digestion, matrix,
+  preparation, acquisition, and signal availability.
+
+- Corrected the mass-accuracy description to include both per-run
+  mass-error distributions and binned median mass-error profiles across
+  precursor m/z.
+
+- Revised the DIA-NN quality section to describe the implemented joint
+  Quantity.Quality and Empirical.Quality visualization and the
+  relationship between PG.MaxLFQ.Quality and precursor support.
+
+- Clarified that dashed quality lines are visual references rather than
+  universal acceptance thresholds.
+
+- Clarified the distinction between positive Precursor.Quantity
+  distributions and protein-group PG.MaxLFQ distributions.
+
+- Revised the data completeness description to define an observation
+  as an available, non-missing Precursor.Quantity value within a valid
+  run-precursor combination.
+
+- Clarified that completeness is calculated in long format without
+  creating a dense run-by-precursor matrix.
+
+- Updated the Figures of Merit description to include precursor charge
+  states and the integrated role of the run-level summary.
+
+- Revised the conditional ion mobility description to distinguish
+  two-dimensional binned precursor counts, separate observed and
+  predicted trends across precursor m/z, and the squared Pearson
+  correlation between observed ion mobility and DIA-NN iIM.
+
+
+Portable Windows Release
+------------------------
+
+- Aligned all scientific R modules in the portable Windows distribution
+  with the validated repository versions.
+
+- Aligned the portable Quarto report with the validated repository
+  version.
+
+- Retained the portable-specific run_qc.R initialization required for
+  execution without an RStudio project file.
+
+- Preserved fallback discovery of Rscript.exe within the bundled
+  Windows runtime.
+
+- Updated the portable example DIA-NN report to
+  example-data/report.parquet.
+
+- Included the corresponding FASTA reference in example-data.
+
+- Updated the portable README to reflect the current example data,
+  directory structure, execution workflow, and generated outputs.
+
+- Updated START_HERE.txt for launcher-based execution and removed
+  instructions that depended on an RStudio project file not included
+  in the portable distribution.
+
+- Removed temporary R session files from the portable distribution.
+
+- Confirmed that no development-machine paths or obsolete example-data
+  references remain in the portable scientific files.
+
+- Validated the syntax of all portable R scripts using the bundled
+  R runtime.
+
+- Confirmed successful launcher-based generation of:
+  - the QC-espresso HTML report;
+  - the protein coverage CSV;
+  - the run-level Figures of Merit CSV.
+
+- Confirmed controlled omission of the ion mobility section when the
+  selected DIA-NN report does not contain valid ion mobility data.
+
+
+Documentation
+-------------
+
+- Standardized and expanded the headers of the automated test scripts.
+
+- Updated the README to describe the current repository and portable
+  execution modes.
+
+- Updated the documented example dataset path to
+  example-data/report.parquet.
+
+- Clarified the distinction between repository validation and routine
+  portable execution.
+
+- Updated user-facing descriptions of inputs, outputs, optional
+  sections, and troubleshooting.
+
+- Aligned documentation terminology with DIA-NN fields and the actual
+  analytical level used by each module.
+
+
+Notes
+-----
+
+- No new QC category was introduced in this version.
+
+- Scientific categories introduced in earlier versions were retained,
+  documented more precisely, and covered by expanded validation.
+
+- The complete consolidated validation audit passed all nine scheduled
+  suites.
+
+- Local test logs and diagnostic outputs are not included in the
+  distributed repository or portable release.
+
+- The portable distribution does not include the development test
+  suite and is intended for routine end-user execution.
+
+
+============================================================
+Version v1.3.0
+============================================================
+
+Focus: Scientific workflow formalization and automated validation
+
+This version formalized the execution, validation, and reproducibility
+architecture of the expanded QC-espresso scientific workflow.
+
+
+Added
+-----
+
+- Added explicit validation of:
+  - required R packages;
+  - DIA-NN Parquet input files;
+  - FASTA reference files;
+  - required DIA-NN report columns;
+  - output-directory creation and write access.
+
+- Added automated validation suites for:
+  - repository and input baseline;
+  - protein-group abundance and multi-protein annotation;
+  - missed tryptic cleavages;
+  - optional report sections;
+  - precursor-level completeness;
+  - protein sequence coverage;
+  - intensity and PG.MaxLFQ behavior;
+  - scientific-core integration;
+  - end-to-end report rendering.
+
+- Added scientific-core integration validation covering the interaction
+  between report loading, FASTA parsing, annotation, analytical modules,
+  outputs, and report rendering.
+
+- Added end-to-end validation of the scientific runner and generated
+  report artifacts.
+
+- Added structured local outputs for test summaries, diagnostic tables,
+  and individual execution logs.
+
+
+Changed
+-------
+
+- Separated focused module tests from integration and end-to-end
+  validation.
+
+- Expanded the scientific runner to provide deterministic execution
+  directories, explicit Quarto discovery, controlled rendering
+  environments, and structured execution results.
+
+- Replaced multiple fixed dataset expectations with dynamic checks of
+  relationships, schemas, bounds, and scientific invariants.
+
+- Improved validation of generated CSV files and HTML report outputs.
+
+- Standardized the use of the current example dataset and FASTA
+  reference across the validation workflow.
+
+
+Portable Windows Execution
+--------------------------
+
+- Consolidated the Windows portable execution model with bundled R and
+  Quarto runtimes.
+
+- Added launcher-based selection of the DIA-NN Parquet report, FASTA
+  reference, and output location.
+
+- Improved runtime discovery, environment isolation, and error
+  reporting.
+
+- Confirmed that the portable launcher calls the same scientific
+  modules and Quarto report used by repository-based execution.
+
+
+Documentation
+-------------
+
+- Expanded the README with separate instructions for scientific,
+  repository-based, and portable Windows use.
+
+- Documented input requirements, output structure, package restoration,
+  Quarto discovery, execution behavior, and troubleshooting.
+
+- Added user-facing documentation for the portable Windows release.
+
+
+============================================================
+Version v0.3.0
+============================================================
+
+Focus: Expansion and integration of scientific QC categories
+
+This version expanded the scientific scope of the report beyond the
+initial identification, chromatography, peptide, intensity, and
+completeness metrics.
+
+
+Added
+-----
+
+- Added a consolidated run-level Figures of Merit table containing:
+  - identification depth;
+  - chromatographic peak-width summaries;
+  - retention-time deviation;
+  - precursor mass error;
+  - peptide-length and missed-cleavage summaries;
+  - charge-state percentages;
+  - contaminant signal contribution.
+
+- Added CSV export of the complete run-level Figures of Merit table.
+
+- Added DIA-NN precursor-level quality assessment using:
+  - Quantity.Quality;
+  - Empirical.Quality;
+  - their joint two-dimensional distribution by run.
+
+- Added protein-group quantification quality assessment using:
+  - PG.MaxLFQ.Quality;
+  - the number of distinct supporting precursors.
+
+- Added conditional ion mobility assessment using:
+  - supported observed ion mobility fields;
+  - precursor m/z-ion mobility separation space;
+  - DIA-NN iIM values when available;
+  - separate observed and predicted linear trends;
+  - run-level trend annotations.
+
+- Added centralized FASTA-derived annotation of protein groups.
+
+- Added explicit handling of multi-protein groups without duplicating
+  protein-group quantitative signal.
+
+- Added annotation-status categories for complete, partial, missing,
+  consistent, and multiple FASTA annotations.
+
+- Added contaminant recognition based on CON_ and cRAP- accession
+  prefixes.
+
+- Added contaminant-signal composition and contaminant-fraction
+  summaries.
+
+- Added conditional warnings when contaminant annotations or positive
+  contaminant signals are unavailable.
+
+- Added conditional execution of optional sections when required fields
+  or valid observations are unavailable.
+
+
+Changed
+-------
+
+- Modularized the expanded scientific analyses into dedicated R
+  scripts.
+
+- Centralized FASTA parsing and peptide-evidence preparation.
+
+- Improved run-level color handling and visualization consistency.
+
+- Expanded the Quarto report structure to include the new scientific
+  sections and conditional outputs.
+
+- Improved the integration of run-level tables, plots, and exported
+  results.
+
+
+Notes
+-----
+
+- This version substantially expanded the scientific breadth of
+  QC-espresso.
+
+- Later versions focused on formal validation, execution hardening,
+  documentation alignment, and portable release consolidation.
+
+
+============================================================
+Version v0.2.7
+============================================================
+
+Focus: Portability, execution robustness, and architectural hardening
+
+This version represents a major infrastructure milestone. No changes
+were made to the scientific scope of the QC report; all work focused
+on making the pipeline portable, deterministic, and safe for routine
+laboratory use across heterogeneous environments.
+
+
+Added / Changed
+---------------
+
+Execution and Portability
+-------------------------
+
+- Introduced a fully portable execution model:
+  - no hard-coded absolute paths;
+  - project root resolved dynamically at runtime;
+  - consistent behavior regardless of working directory.
+
+- Implemented Quarto-aware root discovery using structural markers
+  rather than getwd().
+
+- Removed remaining working-directory-based assumptions from the
+  scientific workflow.
+
+- Added parameterized input handling for the DIA-NN report and FASTA
+  reference while preserving project-default behavior.
+
+- Ensured deterministic use of project-local input and output
+  directories.
+
+
+Runtime and Environment
+-----------------------
+
+- Added support for portable R and Quarto runtimes shipped with the
+  project.
+
+- Introduced a project-local startup environment for controlled R
+  execution.
+
+- Ensured Quarto rendering uses the resolved R executable consistently
+  across systems.
+
+- Improved transparency by explicitly reporting:
+  - resolved project root;
+  - selected DIA-NN report;
+  - FASTA selection rule and selected file.
+
+
+Output Handling
+---------------
+
+- Centralized generated outputs in the Results directory.
+
+- Ensured that the HTML QC report and protein coverage CSV are saved to
+  the Results directory.
+
+- Preserved prior reports to avoid accidental overwriting.
+
+
+Launcher
+--------
+
+- Preserved the established launcher behavior.
+
+- Established the launcher as the primary routine execution interface.
+
+- Added input validation before execution.
+
+- Added early failure when required inputs or tools are unavailable.
+
+- Standardized the recommended launcher-based execution workflow.
+
+
+Documentation
+-------------
+
+- Revised documentation to reflect the portable execution model.
+
+- Updated launcher documentation to describe:
+  - input validation;
+  - tool discovery;
+  - failure behavior.
+
+- Updated scientific workflow documentation to describe:
+  - context-aware path resolution;
+  - parameterized inputs;
+  - data flow;
+  - QC logic.
+
+- Updated user-facing instructions to:
+  - place routine usage first;
+  - describe required inputs explicitly;
+  - explain launcher-based interaction;
+  - separate routine use from implementation details.
+
+- Clarified the use and licensing scope of third-party software,
+  including R and Quarto.
+
+
+Notes
+-----
+
+- No new QC metrics were introduced in this version.
+
+- No analytical logic was modified.
+
+- No biological interpretation was added or changed.
+
+- The changes were structural, architectural, and execution-focused.
+
+- This version provided the foundation for subsequent scientific and
+  validation expansion.
+
+
+============================================================
+Version v0.2.6
+============================================================
+
+Focus: Expanded QC scope and internal consistency
+
+
+Added
+-----
+
+- Added protein sequence coverage assessment at the amino-acid level:
+  - identified peptides mapped to reference protein sequences;
+  - coverage percentage calculated per reference protein;
+  - top-ranked proteins displayed in the HTML report;
+  - peptide-supported coverage results exported as CSV.
+
+- Added monitoring of predefined trypsin autolysis precursors:
+  - retention-time reproducibility across runs;
+  - quantitative signal stability;
+  - conditional execution when matching precursors are detected.
+
+
+Improved
+--------
+
+- Consolidated and standardized QC visualizations across sections.
+
+- Improved table formatting and consistency using gt and gtExtras.
+
+- Added defensive guards for optional QC components.
+
+- Refined data completeness reporting and presentation.
+
+
+Documentation
+-------------
+
+- Added detailed scientific-script documentation.
+
+- Added dedicated launcher documentation.
+
+- Clarified which data are displayed in the report and which data are
+  exported.
+
+
+Notes
+-----
+
+- This version broadened QC beyond run-level metrics by adding
+  protein-centric and internal-process-reference diagnostics.
+
+
+============================================================
+Version v0.2.5 and Earlier
+============================================================
+
+- Introduced the initial DIA quality-control framework.
+
+- Added core run-level QC metrics:
+  - identification depth;
+  - precursor charge-state distribution;
+  - peptide-length distribution;
+  - retention-time coverage;
+  - chromatographic performance using FWHM and peak width;
+  - precursor mass accuracy;
+  - digestion efficiency;
+  - signal-intensity distributions;
+  - precursor-level data completeness.
+
+- Added the initial Quarto-based HTML report.
+
+- Added initial Windows launcher support.
+
+
+============================================================
+END OF FILE
+============================================================
