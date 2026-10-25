@@ -4,7 +4,7 @@ QC-espresso generates an HTML quality-control report and exportable summary tabl
 
 The scientific workflow is written in R and can be executed through RStudio or a regular R session. 
 
-A portable Windows executable is available for [download here](https://github.com/lanfredig/QC-espresso_DIA/releases/download/v1.3.1-portable/QC-espresso_v1.3.1_Windows_portable.zip) as a secondary option for routine use. Both execution modes use the DIA-NN `report.parquet` file together with the same FASTA database used for data processing and call the same scientific workflow.
+A portable Windows executable is available for [download here](https://github.com/lanfredig/QC-espresso_DIA/releases/download/v1.3.1/QC-espresso_v1.3.1_Windows_portable.zip) as a secondary option for routine use. Both execution modes use the DIA-NN `report.parquet` file together with the same FASTA database used for data processing and call the same scientific workflow.
 
 ## Requirements
 
