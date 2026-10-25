@@ -2,7 +2,7 @@
 
 QC-espresso generates an HTML quality-control report and exportable summary tables for data-independent acquisition (DIA) proteomics experiments processed with DIA-NN.
 
-The scientific workflow is written in R and can be executed through RStudio or a regular R session. 
+The scientific workflow is written in R and can be executed through RStudio or a regular R session.
 
 A portable Windows executable is available for [download here](https://github.com/lanfredig/QC-espresso_DIA/releases/download/v1.3.1/QC-espresso_v1.3.1_Windows_portable.zip) as a secondary option for routine use. Both execution modes use the DIA-NN `report.parquet` file together with the same FASTA database used for data processing and call the same scientific workflow.
 
@@ -57,12 +57,6 @@ Clone the repository:
 ```bash
 git clone https://github.com/lanfredig/QC-espresso_DIA.git
 cd QC-espresso_DIA
-```
-
-To use the validated technical branch:
-
-```bash
-git checkout jpr-technical-note
 ```
 
 #### Windows: install Rtools45
@@ -162,7 +156,7 @@ QC-espresso_v1.3.1_Windows_portable/
 │   ├── library/
 │   └── quarto/
 └── QC-espresso_DIA/
-    ├──example-data/
+    ├── example-data/
     ├── launcher/
     │   └── QC-espresso.exe
     ├── output/
@@ -320,7 +314,7 @@ system2(
 )
 ```
 
-The validated audit result for the technical branch is:
+The validated audit result for version 1.3.1 is:
 
 ```text
 PASS: 23
