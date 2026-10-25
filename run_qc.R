@@ -279,6 +279,7 @@ build_quarto_arguments <- function(
     "render",
     shQuote(qmd_path),
     "--to", "html",
+    "--no-clean",
     "--output-dir", shQuote(execution_directory),
     "-P", shQuote(paste0("report_path=", report_path)),
     "-P", shQuote(paste0("fasta_path=", fasta_path)),
