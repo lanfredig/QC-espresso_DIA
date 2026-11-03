@@ -10,8 +10,29 @@ The scientific workflow is implemented in R and Quarto and can be executed throu
 
 The scientific description and validation of QC-espresso are available in the [bioRxiv preprint](https://doi.org/10.64898/2026.10.29.762921). Problems, suggestions, and feature requests can be submitted through the [GitHub issue tracker](https://github.com/lanfredig/QC-espresso_DIA/issues).
 
+## Preview
+
+### QC-espresso report
+
+The generated HTML report provides a structured overview of identification, quantitative signal composition, sequence coverage, peptide quality, chromatography, mass accuracy, quantification quality, intensity distributions, data completeness, and run-level Figures of Merit.
+
+assets/screenshots/report_header.png
+
+### Portable Windows execution
+
+The portable Windows interface guides the user through the selection of the DIA-NN report and corresponding FASTA database.
+
+assets/screenshots/loading_inputs.png
+
+During execution, the console displays input validation, runtime discovery, scientific report-processing stages, output generation, and completion status.
+
+assets/screenshots/processing_plotting.png
+
 ## Contents
 
+- #preview
+  - #qc-espresso-report
+  - #portable-windows-execution
 - [Requirements](#requirements)
   - [Scientific and reproducible execution](#scientific-and-reproducible-execution)
   - [Portable Windows execution](#portable-windows-execution)
