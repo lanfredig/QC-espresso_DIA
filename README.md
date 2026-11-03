@@ -30,9 +30,9 @@ During execution, the console displays completion status.
 
 ## Contents
 
-- #preview
-  - #qc-espresso-report
-  - #portable-windows-execution
+- [Preview](#preview)
+  - [QC-espresso report](#qc-espresso-report)
+  - [Portable Windows execution](#portable-windows-execution)
 - [Requirements](#requirements)
   - [Scientific and reproducible execution](#scientific-and-reproducible-execution)
   - [Portable Windows execution](#portable-windows-execution)
