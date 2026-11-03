@@ -22,6 +22,7 @@ The scientific description and validation of QC-espresso are available in the [b
 - [Usage](#usage)
   - [1. Scientific and reproducible execution](#1-scientific-and-reproducible-execution)
   - [2. Portable Windows executable](#2-portable-windows-executable)
+- [Example reports](#example-reports) 
 - [Output files](#output-files)
   - [HTML report](#html-report)
   - [CSV exports](#csv-exports)
@@ -279,6 +280,16 @@ followed by:
 ```text
 PROCESS COMPLETED SUCCESSFULLY
 ```
+## Example reports
+
+Example QC-espresso reports generated from the manuscript datasets are available below:
+
+- [Dataset 1: Contaminant contribution](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_1_contaminants/qc_espresso_scientific.html)
+- [Dataset 2: LC performance](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_2_LC/qc_espresso_scientific.html)
+- [Dataset 3: Quantification quality](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_3_quantification/qc_espresso_scientific.html)
+- [Dataset 4: Benchmark](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_4_benchmark/qc_espresso_scientific.html)
+  
+These reports are provided as examples of QC-espresso output. Each report was generated from the corresponding manuscript dataset using the same scientific workflow available in this repository.
 
 ## Output files
 
