@@ -8,8 +8,8 @@ repository-code: "https://github.com/lanfredig/QC-espresso_DIA"
 url: "https://github.com/lanfredig/QC-espresso_DIA"
 
 authors:
-  - family-names: "Pauperio Lanfredi"
-    given-names: "Guilherme"
+  - family-names: "Lanfredi"
+    given-names: "Guilherme Pauperio"
     orcid: "https://orcid.org/0000-0001-8300-7766"
 
   - family-names: "Miyamoto"
@@ -20,8 +20,8 @@ preferred-citation:
   type: article
   title: "QC-espresso: Brewing quality in proteomics"
   authors:
-    - family-names: "Pauperio Lanfredi"
-      given-names: "Guilherme"
+    - family-names: "Lanfredi"
+      given-names: "Guilherme Pauperio"
       orcid: "https://orcid.org/0000-0001-8300-7766"
 
     - family-names: "Miyamoto"
