@@ -1,30 +1,59 @@
 # <img src="QC-espresso.ico" width="40" height="40" alt="QC-espresso logo"> QC-espresso
 
-QC-espresso generates an HTML quality-control report and exportable summary tables for data-independent acquisition (DIA) proteomics experiments processed with DIA-NN. The scientific workflow is written in R and can be executed through RStudio or a regular R session. A [portable Windows version](https://github.com/lanfredig/QC-espresso_DIA/releases/download/v1.3.1/QC-espresso_v1.3.1_Windows_portable.zip) is also available as a secondary option for routine use. Both execution modes use the DIA-NN `report.parquet` file together with the same FASTA database used for data processing and call the same scientific workflow. The scientific description and validation of QC-espresso are available in the [bioRxiv preprint](https://doi.org/10.64898/2026.10.29.762921), and problems or suggestions can be submitted through the [GitHub issue tracker](https://github.com/lanfredig/QC-espresso_DIA/issues).
+[![bioRxiv](https://img.shields.io/badge/bioRxiv-10.64898%2F2026.10.29.762921-B31B1B.svg)](https://doi.org/10.64898/2026.10.29.762921)
+[![GitHub release](https://img.shields.io/github/v/release/lanfredig/QC-espresso_DIA?label=release)](https://github.com/lanfredig/QC-espresso_DIA/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+QC-espresso is an open-source quality-control workflow for data-independent acquisition (DIA) mass-spectrometry proteomics data processed with DIA-NN. It reads the DIA-NN `report.parquet` file and the corresponding FASTA database to generate a structured HTML quality-control report and exportable run-level and protein-level summary tables.
+
+The scientific workflow is implemented in R and Quarto and can be executed through RStudio or a regular R session. A [portable Windows version](https://github.com/lanfredig/QC-espresso_DIA/releases/download/v1.3.1/QC-espresso_v1.3.1_Windows_portable.zip) is also available as a secondary option for routine use. Both execution modes use the same DIA-NN report and FASTA inputs and call the same scientific workflow.
+
+The scientific description and validation of QC-espresso are available in the [bioRxiv preprint](https://doi.org/10.64898/2026.10.29.762921). Problems, suggestions, and feature requests can be submitted through the [GitHub issue tracker](https://github.com/lanfredig/QC-espresso_DIA/issues).
+
+## Contents
+
+- [Requirements](#requirements)
+  - [Scientific and reproducible execution](#scientific-and-reproducible-execution)
+  - [Portable Windows execution](#portable-windows-execution)
+  - [Input files](#input-files)
+- [Installation](#installation)
+  - [1. Scientific and reproducible installation](#1-scientific-and-reproducible-installation)
+  - [2. Portable Windows installation](#2-portable-windows-installation)
+- [Usage](#usage)
+  - [1. Scientific and reproducible execution](#1-scientific-and-reproducible-execution)
+  - [2. Portable Windows executable](#2-portable-windows-executable)
+- [Output files](#output-files)
+  - [HTML report](#html-report)
+  - [CSV exports](#csv-exports)
+- [Important analytical behavior](#important-analytical-behavior)
+- [Reproducibility and validation](#reproducibility-and-validation)
+- [Troubleshooting](#troubleshooting)
+- [Repository structure](#repository-structure)
+- [Distribution and source availability](#distribution-and-source-availability)
+- [Citation](#citation)
+- [Feedback and support](#feedback-and-support)
+- [License](#license)
+
 ## Requirements
 
-### 🔬 Scientific and reproducible execution
+### Scientific and reproducible execution
 
 - **R 4.6.0**
-- **RStudio** recommended for interactive use
+- **RStudio**, recommended for interactive use
 - **Quarto** for HTML report generation
 - R package dependencies recorded in `renv.lock`
 - **Rtools45 on Windows**, using the toolchain compatible with R 4.6.x
 
 > [!IMPORTANT]
 > Windows users must install Rtools45 before running `renv::restore()`.
-> The lockfile may require packages to be installed from source. Packages
-> containing compiled C, C++, or Fortran code, including dependencies such
-> as `arrow` and `data.table`, require a working compiler toolchain and build
-> utilities such as `make` and `sh`. These tools are not included in a
-> standard Windows installation and are provided by Rtools45.
 >
-> Rtools44 is intended for R 4.4.x and must not be used with the validated
-> R 4.6.0 environment.
+> The lockfile may require packages to be installed from source. Packages containing compiled C, C++, or Fortran code, including dependencies such as `arrow` and `data.table`, require a working compiler toolchain and build utilities such as `make` and `sh`. These tools are not included in a standard Windows installation and are provided by Rtools45.
+>
+> Rtools44 is intended for R 4.4.x and must not be used with the validated R 4.6.0 environment.
 
 QC-espresso automatically searches for Quarto in the system `PATH`, common standalone installation directories, recent RStudio installations, and a portable runtime located next to the repository.
 
-### ▶ Portable Windows execution
+### Portable Windows execution
 
 The portable Windows Release includes:
 
@@ -56,9 +85,7 @@ cd QC-espresso_DIA
 
 #### Windows: install Rtools45
 
-Download and install Rtools45 from the official CRAN page:
-
-https://cran.r-project.org/bin/windows/Rtools/
+Download and install Rtools45 from the [official CRAN Rtools page](https://cran.r-project.org/bin/windows/Rtools/).
 
 Use the default installation location:
 
@@ -136,7 +163,7 @@ quarto --version
 
 ### 2. Portable Windows installation
 
-1. Download `QC-espresso_v1.3.1_Windows_portable.zip` from the GitHub Releases page.
+1. Download [`QC-espresso_v1.3.1_Windows_portable.zip`](https://github.com/lanfredig/QC-espresso_DIA/releases/download/v1.3.1/QC-espresso_v1.3.1_Windows_portable.zip) from the [GitHub Releases page](https://github.com/lanfredig/QC-espresso_DIA/releases).
 2. Extract the complete archive to a local directory.
 3. Keep the `runtime` directory next to the `QC-espresso_DIA` directory.
 4. Do not move individual runtime folders or application files after extraction.
@@ -331,7 +358,7 @@ Confirm that Rtools45 is installed in `C:\rtools45`, restart R or RStudio, and r
 Sys.which(c("make", "sh", "gcc", "g++"))
 ```
 
-If any returned value is empty, reinstall Rtools45 from the official CRAN page and keep the default installation path. Do not substitute Rtools44 for the validated R 4.6.0 environment.
+If any returned value is empty, reinstall Rtools45 from the [official CRAN Rtools page](https://cran.r-project.org/bin/windows/Rtools/) and keep the default installation path. Do not substitute Rtools44 for the validated R 4.6.0 environment.
 
 ### `arrow` or another compiled package fails during `renv::restore()`
 
@@ -409,15 +436,40 @@ QC-espresso_DIA/
 
 ## Distribution and source availability
 
-The R scripts, Quarto report, automated tests, example data, and reproducible environment specification are maintained in the GitHub repository.
+The R scripts, Quarto report, automated tests, example data, and reproducible environment specification are maintained in the [GitHub repository](https://github.com/lanfredig/QC-espresso_DIA).
 
 The portable Windows Release is intended for routine end-user execution and includes the compiled executable, the required scientific scripts, the Quarto report, and the portable runtime. The executable is an optional Windows interface that calls the same scientific workflow implemented by `run_qc.R`.
 
-## Feedback
+## Citation
 
-Issues and suggestions can be submitted through the repository issue tracker, particularly for:
+If QC-espresso contributes to your research, cite the associated bioRxiv preprint:
+
+> Lanfredi, G. P., and Miyamoto, J. G. QC-espresso: Brewing quality in proteomics. *bioRxiv* (2026). https://doi.org/10.64898/2026.10.29.762921
+
+Citation metadata are also provided in the `CITATION.cff` file. GitHub can use this file to display the recommended citation through the **Cite this repository** option.
+
+## Feedback and support
+
+Issues and suggestions can be submitted through the [GitHub issue tracker](https://github.com/lanfredig/QC-espresso_DIA/issues), particularly for:
 
 - reproducibility on additional operating systems;
 - DIA-NN schema variants;
 - clearer diagnostics for invalid inputs;
 - additional QC metrics or export formats.
+
+Before opening a new issue, search the existing issues to determine whether the same behavior has already been reported.
+
+When reporting a problem, include:
+
+- the QC-espresso version;
+- the operating system;
+- the execution mode;
+- the DIA-NN version, when known;
+- the relevant console output;
+- a minimal description of the input structure.
+
+Do not upload confidential, sensitive, or identifiable experimental data to a public issue.
+
+## License
+
+QC-espresso is distributed under the terms of the MIT License. See the [`LICENSE`](LICENSE) file for the complete license text.
