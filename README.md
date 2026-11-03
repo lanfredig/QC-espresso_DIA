@@ -16,17 +16,15 @@ The scientific description and validation of QC-espresso are available in the [b
 
 The generated HTML report provides a structured overview of identification, quantitative signal composition, sequence coverage, peptide quality, chromatography, mass accuracy, quantification quality, intensity distributions, data completeness, and run-level Figures of Merit.
 
-assets/screenshots/report_header.png
+![QC-espresso HTML quality-control report](assets/screenshots/report_header.png)
 
 ### Portable Windows execution
 
 The portable Windows interface guides the user through the selection of the DIA-NN report and corresponding FASTA database.
 
-assets/screenshots/loading_inputs.png
+![QC-espresso portable Windows input selection](assets/screenshots/loading_inputs.png)
 
-During execution, the console displays input validation, runtime discovery, scientific report-processing stages, output generation, and completion status.
-
-assets/screenshots/processing_plotting.png
+During execution, the console displays input validation, runtime discovery, scientific report-processing stages, output generation, and completion
 
 ## Contents
 
