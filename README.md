@@ -24,7 +24,9 @@ The portable Windows interface guides the user through the selection of the DIA-
 
 ![QC-espresso portable Windows input selection](assets/screenshots/loading_inputs.png)
 
-During execution, the console displays input validation, runtime discovery, scientific report-processing stages, output generation, and completion
+During execution, the console displays completion status.
+
+![QC-espresso portable Windows completion](assets/screenshots/processing_plotting.png)
 
 ## Contents
 
