@@ -1,15 +1,35 @@
 cff-version: 1.2.0
-message: "If you use QC-espresso in your research, please cite the software using the metadata in this file."
+message: "If you use QC-espresso in your research, please cite the software and its associated publication using the metadata in this file."
 title: "QC-espresso"
 type: software
 version: 1.3.1
 license: MIT
 repository-code: "https://github.com/lanfredig/QC-espresso_DIA"
 url: "https://github.com/lanfredig/QC-espresso_DIA"
+
 authors:
-  - family-names: "Lanfredi"
+  - family-names: "Pauperio Lanfredi"
     given-names: "Guilherme"
     orcid: "https://orcid.org/0000-0001-8300-7766"
+
   - family-names: "Miyamoto"
     given-names: "Jackson Gabriel"
     orcid: "https://orcid.org/0000-0002-0768-0390"
+
+preferred-citation:
+  type: article
+  title: "QC-espresso: Brewing quality in proteomics"
+  authors:
+    - family-names: "Pauperio Lanfredi"
+      given-names: "Guilherme"
+      orcid: "https://orcid.org/0000-0001-8300-7766"
+
+    - family-names: "Miyamoto"
+      given-names: "Jackson Gabriel"
+      orcid: "https://orcid.org/0000-0002-0768-0390"
+
+  journal: "bioRxiv"
+  year: 2026
+  date-released: "2026-11-02"
+  doi: "10.64898/2026.10.29.762921"
+  url: "https://doi.org/10.64898/2026.10.29.762921"
