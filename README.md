@@ -10,27 +10,19 @@ The scientific workflow is implemented in R and Quarto and can be executed throu
 
 The scientific description and validation of QC-espresso are available in the [bioRxiv preprint](https://doi.org/10.64898/2026.10.29.762921). Problems, suggestions, and feature requests can be submitted through the [GitHub issue tracker](https://github.com/lanfredig/QC-espresso_DIA/issues).
 
-## Preview
+## Example reports
 
-### QC-espresso report
+Example QC-espresso reports generated from the manuscript datasets are available below:
 
-The generated HTML report provides a structured overview of identification, quantitative signal composition, sequence coverage, peptide quality, chromatography, mass accuracy, quantification quality, intensity distributions, data completeness, and run-level Figures of Merit.
-
-![QC-espresso HTML quality-control report](assets/screenshots/report_header.png)
-
-### Portable Windows execution
-
-The portable Windows interface guides the user through the selection of the DIA-NN report and corresponding FASTA database.
-
-![QC-espresso portable Windows input selection](assets/screenshots/loading_inputs.png)
-
-During execution, the console displays completion status.
-
-![QC-espresso portable Windows completion](assets/screenshots/processing_plotting.png)
+- [Dataset 1: Contaminant contribution](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_1_contaminants/qc_espresso_scientific.html)
+- [Dataset 2: LC performance](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_2_LC/qc_espresso_scientific.html)
+- [Dataset 3: Quantification quality](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_3_quantification/qc_espresso_scientific.html)
+- [Dataset 4: Benchmark](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_4_benchmark/qc_espresso_scientific.html)
+  
+These reports are provided as examples of QC-espresso output. Each report was generated from the corresponding manuscript dataset using the same scientific workflow available in this repository.
 
 ## Contents
-
-- [Preview](#preview)
+- [Example reports](#example-reports)
   - [QC-espresso report](#qc-espresso-report)
   - [Portable Windows execution](#portable-windows-execution)
 - [Requirements](#requirements)
@@ -43,7 +35,7 @@ During execution, the console displays completion status.
 - [Usage](#usage)
   - [1. Scientific and reproducible execution](#1-scientific-and-reproducible-execution)
   - [2. Portable Windows executable](#2-portable-windows-executable)
-- [Example reports](#example-reports) 
+- [Preview](#preview)
 - [Output files](#output-files)
   - [HTML report](#html-report)
   - [CSV exports](#csv-exports)
@@ -301,16 +293,25 @@ followed by:
 ```text
 PROCESS COMPLETED SUCCESSFULLY
 ```
-## Example reports
 
-Example QC-espresso reports generated from the manuscript datasets are available below:
+## Preview
 
-- [Dataset 1: Contaminant contribution](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_1_contaminants/qc_espresso_scientific.html)
-- [Dataset 2: LC performance](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_2_LC/qc_espresso_scientific.html)
-- [Dataset 3: Quantification quality](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_3_quantification/qc_espresso_scientific.html)
-- [Dataset 4: Benchmark](https://lanfredig.github.io/QC-espresso_DIA/manuscript/dataset_4_benchmark/qc_espresso_scientific.html)
-  
-These reports are provided as examples of QC-espresso output. Each report was generated from the corresponding manuscript dataset using the same scientific workflow available in this repository.
+### QC-espresso report
+
+The generated HTML report provides a structured overview of identification, quantitative signal composition, sequence coverage, peptide quality, chromatography, mass accuracy, quantification quality, intensity distributions, data completeness, and run-level Figures of Merit.
+
+![QC-espresso HTML quality-control report](assets/screenshots/report_header.png)
+
+### Portable Windows execution
+
+The portable Windows interface guides the user through the selection of the DIA-NN report and corresponding FASTA database.
+
+![QC-espresso portable Windows input selection](assets/screenshots/loading_inputs.png)
+
+During execution, the console displays completion status.
+
+![QC-espresso portable Windows completion](assets/screenshots/processing_plotting.png)
+
 
 ## Output files
 
