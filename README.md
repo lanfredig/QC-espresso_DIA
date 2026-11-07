@@ -6,7 +6,7 @@
 
 QC-espresso is an open-source quality-control workflow for data-independent acquisition (DIA) mass-spectrometry proteomics data processed with DIA-NN. It reads the DIA-NN `report.parquet` file and the corresponding FASTA database to generate a structured HTML quality-control report and exportable run-level and protein-level summary tables.
 
-The scientific workflow is implemented in R and Quarto and can be executed through RStudio or a regular R session. A [portable Windows version](https://github.com/lanfredig/QC-espresso_DIA/releases/download/v1.3.1/QC-espresso_v1.3.1_Windows_portable.zip) is also available as a secondary option for routine use. Both execution modes use the same DIA-NN report and FASTA inputs and call the same scientific workflow.
+The scientific workflow is implemented in R and Quarto and can be executed through RStudio or a regular R session. A [portable Windows version](https://github.com/lanfredig/QC-espresso_DIA/releases) is also available as a secondary option for routine use. Both execution modes use the same DIA-NN report and FASTA inputs and call the same scientific workflow.
 
 The scientific description and validation of QC-espresso are available in the [bioRxiv preprint](https://doi.org/10.64898/2026.10.29.762921). Problems, suggestions, and feature requests can be submitted through the [GitHub issue tracker](https://github.com/lanfredig/QC-espresso_DIA/issues).
 
