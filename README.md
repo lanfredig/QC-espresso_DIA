@@ -23,8 +23,8 @@ These reports are provided as examples of QC-espresso output. Each report was ge
 
 ## Contents
 - [Example reports](#example-reports)
-  - [QC-espresso report](#qc-espresso-report)
-  - [Portable Windows execution](#portable-windows-execution)
+- [QC-espresso report](#qc-espresso-report)
+- [Portable Windows execution](#portable-windows-execution)
 - [Requirements](#requirements)
   - [Scientific and reproducible execution](#scientific-and-reproducible-execution)
   - [Portable Windows execution](#portable-windows-execution)
